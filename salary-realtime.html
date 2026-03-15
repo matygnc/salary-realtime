@@ -1,0 +1,1877 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>給料リアルタイム表示</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: rgba(15, 23, 42, 0.82);
+      --card-2: rgba(30, 41, 59, 0.85);
+      --line: rgba(148, 163, 184, 0.22);
+      --text: #f8fafc;
+      --muted: #cbd5e1;
+      --sub: #94a3b8;
+      --accent: #8b5cf6;
+      --accent-2: #c084fc;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --danger: #ef4444;
+      --shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+      --radius: 24px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top, rgba(139, 92, 246, 0.24), transparent 34%),
+        linear-gradient(180deg, #0b1020 0%, #111827 55%, #0f172a 100%);
+      color: var(--text);
+      min-height: 100%;
+    }
+
+    body {
+      padding: calc(env(safe-area-inset-top) + 12px) 14px calc(env(safe-area-inset-bottom) + 24px);
+    }
+
+    .app {
+      width: 100%;
+      max-width: 460px;
+      margin: 0 auto;
+      display: grid;
+      gap: 14px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      overflow: hidden;
+    }
+
+    .hero {
+      padding: 18px;
+      background:
+        linear-gradient(145deg, rgba(139, 92, 246, 0.26), rgba(30, 41, 59, 0.26)),
+        var(--card);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.2;
+      font-weight: 800;
+    }
+
+    .money {
+      margin-top: 16px;
+      font-size: clamp(40px, 12vw, 56px);
+      font-weight: 900;
+      letter-spacing: 0.02em;
+      line-height: 1;
+    }
+
+    .caption {
+      margin-top: 10px;
+      font-size: 15px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .hero-action {
+      margin-top: 14px;
+    }
+
+    .progress-wrap {
+      margin-top: 14px;
+    }
+
+    .progress-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .progress {
+      height: 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      transition: width 0.35s ease;
+    }
+
+    .grid2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      padding: 14px;
+    }
+
+    .mini {
+      padding: 14px;
+      background: var(--card-2);
+      border-radius: 20px;
+      border: 1px solid var(--line);
+    }
+
+    .mini.full {
+      grid-column: 1 / -1;
+    }
+
+    .mini.emphasis {
+      background:
+        linear-gradient(145deg, rgba(34, 197, 94, 0.18), rgba(15, 23, 42, 0.24)),
+        var(--card-2);
+      border-color: rgba(34, 197, 94, 0.28);
+    }
+
+    .mini-label {
+      font-size: 12px;
+      color: var(--sub);
+      margin-bottom: 6px;
+    }
+
+    .mini-value {
+      font-size: 20px;
+      font-weight: 800;
+    }
+
+    .mini-note {
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .summary-section {
+      padding: 16px;
+    }
+
+    .summary-stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    .summary-panel {
+      padding: 14px;
+      border-radius: 22px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.03);
+    }
+
+    .summary-panel-title {
+      margin-bottom: 10px;
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+    }
+
+    .stats-grid {
+      padding: 0;
+    }
+
+    .section {
+      padding: 16px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .section-title h2 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 800;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--muted);
+      background: rgba(255,255,255,0.04);
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    input, select, button {
+      width: 100%;
+      font: inherit;
+      border: 0;
+      outline: none;
+      border-radius: 16px;
+    }
+
+    input, select {
+      padding: 14px;
+      min-height: 52px;
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    input::placeholder { color: #94a3b8; }
+
+    .btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .action-stack {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .action-stack .btn-row {
+      margin-top: 0;
+    }
+
+    .btn-row.single {
+      grid-template-columns: 1fr;
+    }
+
+    .action-main {
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.24), rgba(192, 132, 252, 0.18));
+      border: 1px solid rgba(192, 132, 252, 0.35);
+      box-shadow: 0 10px 24px rgba(139, 92, 246, 0.18);
+    }
+
+    button {
+      padding: 14px;
+      min-height: 52px;
+      font-weight: 800;
+      cursor: pointer;
+      color: white;
+      touch-action: manipulation;
+    }
+
+    .primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      box-shadow: 0 10px 24px rgba(139, 92, 246, 0.32);
+    }
+
+    .secondary {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text);
+    }
+
+    .danger {
+      background: rgba(239,68,68,0.14);
+      border: 1px solid rgba(239,68,68,0.28);
+      color: #fecaca;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      max-width: 100%;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 10px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--ok);
+      box-shadow: 0 0 0 4px rgba(34,197,94,0.16);
+    }
+
+    .status.wait .dot {
+      background: var(--warn);
+      box-shadow: 0 0 0 4px rgba(245,158,11,0.16);
+    }
+
+    .status.off .dot {
+      background: var(--danger);
+      box-shadow: 0 0 0 4px rgba(239,68,68,0.16);
+    }
+
+    .helper-note {
+      margin-top: 12px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+
+    .footer {
+      text-align: center;
+      color: var(--sub);
+      font-size: 11px;
+      padding: 8px 6px 2px;
+      line-height: 1.7;
+    }
+
+    @media (max-width: 420px) {
+      .row, .btn-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 360px) {
+      .grid2 {
+        grid-template-columns: 1fr;
+      }
+
+      .money {
+        font-size: 34px;
+      }
+
+      .mini.full {
+        grid-column: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="card hero">
+      <h1>給料リアルタイム</h1>
+
+      <div class="money" id="liveGrossPay">¥0</div>
+      <div class="caption" id="liveCaption">今月ここまで ¥0</div>
+
+      <div class="hero-action">
+        <button class="primary" id="recordNowBtn">退勤</button>
+      </div>
+
+      <div class="progress-wrap">
+        <div class="progress-top">
+          <span id="progressLabel">勤務進捗</span>
+          <span id="progressPercent">0%</span>
+        </div>
+        <div class="progress">
+          <div class="progress-bar" id="progressBar"></div>
+        </div>
+      </div>
+
+      <div id="shiftStatus" class="status off">
+        <span class="dot"></span>
+        <span>勤務外</span>
+      </div>
+    </section>
+
+    <section class="card section">
+      <div class="section-title">
+        <h2>今日の記録</h2>
+        <span class="pill">記録</span>
+      </div>
+
+      <div class="form-grid">
+        <div class="row">
+          <div>
+            <label for="shiftMode">勤務モード</label>
+            <select id="shiftMode">
+              <option value="auto">自動</option>
+              <option value="first">1直固定</option>
+              <option value="second">2直固定</option>
+              <option value="holiday">休日出勤固定</option>
+              <option value="off">休み固定</option>
+            </select>
+          </div>
+          <div>
+            <label for="recordDate">対象日</label>
+            <input id="recordDate" type="date" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="manualFinishTime">終了時刻</label>
+            <input id="manualFinishTime" type="time" />
+          </div>
+          <div>
+            <label for="manualExtraBreakMinutes">追加休憩（分）</label>
+            <input id="manualExtraBreakMinutes" type="number" inputmode="numeric" placeholder="0" />
+          </div>
+        </div>
+      </div>
+
+      <div class="action-stack">
+        <div class="btn-row single">
+          <button class="secondary action-main" id="applyManualBtn">手入力反映</button>
+        </div>
+        <div class="btn-row">
+          <button class="secondary" id="annualLeaveBtn">年休使用</button>
+          <button class="secondary" id="markOffBtn">休みにする</button>
+        </div>
+        <div class="btn-row single">
+          <button class="danger" id="clearRecordBtn">記録削除</button>
+        </div>
+      </div>
+
+      <div class="helper-note">
+        2直残業の別15分休憩は要確認です。時刻不明のため自動控除していないので、必要な日は「追加休憩」で調整してください。
+      </div>
+    </section>
+
+    <section class="card section summary-section">
+      <div class="section-title">
+        <h2>今月の集計</h2>
+        <span class="pill">月次</span>
+      </div>
+
+      <div class="summary-stack">
+        <div class="summary-panel">
+          <div class="summary-panel-title">勤務と残数</div>
+          <div class="grid2 stats-grid">
+            <div class="mini emphasis full">
+              <div class="mini-label">年休残日数</div>
+              <div class="mini-value" id="annualLeaveBalanceText">7日</div>
+            </div>
+
+            <div class="mini">
+              <div class="mini-label">総残業時間（今月）</div>
+              <div class="mini-value" id="monthOvertimeText">0時間00分</div>
+            </div>
+
+            <div class="mini">
+              <div class="mini-label">総深夜勤務時間（今月）</div>
+              <div class="mini-value" id="monthNightText">0時間00分</div>
+            </div>
+
+            <div class="mini full">
+              <div class="mini-label">総時間帯手当勤務時間（今月分）</div>
+              <div class="mini-value" id="monthTimeBandText">0時間00分</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="summary-panel">
+          <div class="summary-panel-title">手当</div>
+          <div class="grid2 stats-grid">
+            <div class="mini">
+              <div class="mini-label">超過勤務手当（今月分）</div>
+              <div class="mini-value" id="monthOvertimePay">¥0</div>
+            </div>
+
+            <div class="mini">
+              <div class="mini-label">深夜勤務手当（今月分）</div>
+              <div class="mini-value" id="monthNightPay">¥0</div>
+            </div>
+
+            <div class="mini full">
+              <div class="mini-label">時間帯手当（今月分）</div>
+              <div class="mini-value" id="monthTimeBandPay">¥0</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const ALLOWANCE_BASE_HOURLY_WAGE = 1556;
+
+    const APP_CONFIG = {
+      joinDate: '2024-04-16',
+      wages: {
+        wageInitial: 10800,
+        wageSecond: 11300,
+        wageThird: 11600,
+        wageSenior1: 11800,
+        wageSenior2: 12100,
+        wageSenior3: 12100
+      },
+      allowanceBaseHourlyWage: ALLOWANCE_BASE_HOURLY_WAGE,
+      dailyAllowance: 0,
+      allowanceRates: {
+        overtimePerMin: (ALLOWANCE_BASE_HOURLY_WAGE * 1.25) / 60,  // 時間外 25%増し
+        nightPerMin: (ALLOWANCE_BASE_HOURLY_WAGE * 0.30) / 60,     // 深夜手当 30%増し
+        timeBandPerMin: (ALLOWANCE_BASE_HOURLY_WAGE * 0.25) / 60   // 時間帯手当 25%増し
+      }
+    };
+
+    const UI_STORAGE_KEY = 'salary-realtime-ui-v1';
+    const DAILY_RECORD_KEY = 'salary-realtime-daily-records-v1';
+    const ANNUAL_LEAVE_STATE_KEY = 'salary-realtime-annual-leave-v1';
+    const LEGACY_STORAGE_KEYS = {
+      ui: 'ayano-salary-ui-v5',
+      dailyRecords: 'ayano-salary-daily-records-v13',
+      annualLeave: 'ayano-salary-annual-leave-v1'
+    };
+    const PAID_LEAVE_DAILY_PAY = 11800;
+    const ANNUAL_LEAVE_BASELINE = {
+      date: '2026-03-15',
+      remainingDays: 7
+      // 要確認: 現在残日数7日は、2026-03-15時点の初期値として扱う。
+    };
+
+    const FIRST_SHIFT_SEGMENTS = [
+      ['06:30', '08:30'],
+      ['08:40', '10:40'],
+      ['11:25', '12:55'],
+      ['13:05', '14:35'],
+      ['14:45', '15:10']
+    ];
+
+    const SECOND_SHIFT_SEGMENTS = [
+      ['16:45', '18:45'],
+      ['18:55', '20:55'],
+      ['21:40', '23:10'],
+      ['23:20', '00:50'],
+      ['01:00', '01:25']
+    ];
+
+    const SHIFT_PRESETS = {
+      first: {
+        // 白直 = 1直
+        label: '1直',
+        start: '06:30',
+        end: '15:10',
+        fixedEarlyOtMinutes: 5,
+        baseSegments: FIRST_SHIFT_SEGMENTS,
+        overtimeEndTime: '16:35',
+        overtimeBreaks: [
+          ['16:10', '16:20']
+        ]
+      },
+      second: {
+        label: '2直',
+        start: '16:45',
+        end: '01:25',
+        fixedEarlyOtMinutes: 5,
+        baseSegments: SECOND_SHIFT_SEGMENTS,
+        overtimeEndTime: '',
+        overtimeBreaks: [
+          ['02:25', '02:35']
+          // 要確認: 2直残業には別の15分休憩もあるが、時刻不明のため自動控除していない。
+        ]
+      },
+      holiday: {
+        label: '休日出勤',
+        start: '06:30',
+        end: '15:10',
+        fixedEarlyOtMinutes: 0,
+        baseSegments: FIRST_SHIFT_SEGMENTS,
+        overtimeEndTime: '15:10',
+        overtimeBreaks: []
+      },
+      off: {
+        label: '休み',
+        start: '00:00',
+        end: '00:00',
+        fixedEarlyOtMinutes: 0,
+        overtimeEndTime: '',
+        baseSegments: [],
+        overtimeBreaks: []
+      }
+    };
+
+    const WAGE_STAGE_RULES = [
+      { key: 'wageInitial', label: '初回', startType: 'join' },
+      { key: 'wageSecond', label: '2回', startType: 'plusMonths', months: 6 },
+      { key: 'wageThird', label: '3回', startType: 'plusMonths', months: 12 },
+      { key: 'wageSenior1', label: '2年目シニア1回', startType: 'nextMonthAfterMonths', months: 12 },
+      { key: 'wageSenior2', label: '2年目シニア2回', startType: 'plusMonths', months: 24 },
+      { key: 'wageSenior3', label: '3年目シニア', startType: 'plusMonths', months: 30 }
+    ];
+
+    const ANNUAL_LEAVE_GRANT_RULES = [
+      { months: 6, days: 10 },
+      { months: 18, days: 11 },
+      { months: 30, days: 12 },
+      { months: 42, days: 14 },
+      { months: 54, days: 16 },
+      { months: 66, days: 18 },
+      { months: 78, days: 20 }
+      // 要確認: 付与日数は日給等スケジュールPDFを抽出できなかったため、
+      // 一般的な年次有給休暇の付与サイクルで仮置きしている。
+    ];
+
+    const AUTO_SHIFT_RANGES = {
+      first: [
+        ['2026-01-06', '2026-01-09'],
+        ['2026-01-19', '2026-01-23'],
+        ['2026-02-02', '2026-02-06'],
+        ['2026-02-16', '2026-02-20'],
+        ['2026-03-02', '2026-03-06'],
+        ['2026-03-16', '2026-03-20'],
+        ['2026-03-30', '2026-04-03'],
+        ['2026-04-13', '2026-04-17'],
+        ['2026-04-27', '2026-04-28'],
+        ['2026-05-07', '2026-05-15'],
+        ['2026-05-25', '2026-05-29'],
+        ['2026-06-08', '2026-06-12'],
+        ['2026-06-22', '2026-06-26'],
+        ['2026-07-06', '2026-07-10'],
+        ['2026-07-20', '2026-07-24'],
+        ['2026-08-03', '2026-08-07'],
+        ['2026-08-17', '2026-08-17'],
+        ['2026-08-24', '2026-08-28'],
+        ['2026-09-07', '2026-09-11'],
+        ['2026-09-21', '2026-09-25'],
+        ['2026-10-05', '2026-10-09'],
+        ['2026-10-19', '2026-10-23'],
+        ['2026-11-02', '2026-11-06'],
+        ['2026-11-16', '2026-11-20'],
+        ['2026-11-30', '2026-12-04'],
+        ['2026-12-14', '2026-12-18'],
+        ['2027-01-06', '2027-01-08'],
+        ['2027-01-18', '2027-01-22'],
+        ['2027-02-01', '2027-02-05'],
+        ['2027-02-15', '2027-02-19'],
+        ['2027-03-01', '2027-03-05'],
+        ['2027-03-15', '2027-03-19'],
+        ['2027-03-29', '2027-03-31']
+      ],
+      second: [
+        ['2026-01-12', '2026-01-16'],
+        ['2026-01-26', '2026-01-30'],
+        ['2026-02-09', '2026-02-13'],
+        ['2026-02-23', '2026-02-27'],
+        ['2026-03-09', '2026-03-13'],
+        ['2026-03-23', '2026-03-27'],
+        ['2026-04-06', '2026-04-10'],
+        ['2026-04-20', '2026-04-24'],
+        ['2026-05-06', '2026-05-06'],
+        ['2026-05-18', '2026-05-22'],
+        ['2026-06-01', '2026-06-05'],
+        ['2026-06-15', '2026-06-19'],
+        ['2026-06-29', '2026-07-03'],
+        ['2026-07-13', '2026-07-17'],
+        ['2026-07-27', '2026-07-31'],
+        ['2026-08-18', '2026-08-21'],
+        ['2026-08-31', '2026-09-04'],
+        ['2026-09-14', '2026-09-18'],
+        ['2026-09-28', '2026-10-02'],
+        ['2026-10-12', '2026-10-16'],
+        ['2026-10-26', '2026-10-30'],
+        ['2026-11-09', '2026-11-13'],
+        ['2026-11-23', '2026-11-27'],
+        ['2026-12-07', '2026-12-11'],
+        ['2026-12-21', '2026-12-25'],
+        ['2027-01-11', '2027-01-15'],
+        ['2027-01-25', '2027-01-29'],
+        ['2027-02-08', '2027-02-12'],
+        ['2027-02-22', '2027-02-26'],
+        ['2027-03-08', '2027-03-12'],
+        ['2027-03-22', '2027-03-26']
+      ]
+    };
+
+    const els = {
+      liveGrossPay: document.getElementById('liveGrossPay'),
+      liveCaption: document.getElementById('liveCaption'),
+      progressLabel: document.getElementById('progressLabel'),
+      progressPercent: document.getElementById('progressPercent'),
+      progressBar: document.getElementById('progressBar'),
+      shiftStatus: document.getElementById('shiftStatus'),
+      monthOvertimeText: document.getElementById('monthOvertimeText'),
+      monthNightText: document.getElementById('monthNightText'),
+      monthTimeBandText: document.getElementById('monthTimeBandText'),
+      annualLeaveBalanceText: document.getElementById('annualLeaveBalanceText'),
+      monthOvertimePay: document.getElementById('monthOvertimePay'),
+      monthNightPay: document.getElementById('monthNightPay'),
+      monthTimeBandPay: document.getElementById('monthTimeBandPay'),
+      shiftMode: document.getElementById('shiftMode'),
+      recordDate: document.getElementById('recordDate'),
+      manualFinishTime: document.getElementById('manualFinishTime'),
+      manualExtraBreakMinutes: document.getElementById('manualExtraBreakMinutes'),
+      recordNowBtn: document.getElementById('recordNowBtn'),
+      applyManualBtn: document.getElementById('applyManualBtn'),
+      markOffBtn: document.getElementById('markOffBtn'),
+      clearRecordBtn: document.getElementById('clearRecordBtn'),
+      annualLeaveBtn: document.getElementById('annualLeaveBtn')
+    };
+
+    const defaultUI = {
+      shiftMode: 'auto',
+      recordDate: '',
+      manualFinishTime: '',
+      manualExtraBreakMinutes: 0
+    };
+
+    function loadUI() {
+      try {
+        const raw = getStorageValue(UI_STORAGE_KEY, LEGACY_STORAGE_KEYS.ui);
+        return raw ? { ...defaultUI, ...JSON.parse(raw) } : { ...defaultUI };
+      } catch {
+        return { ...defaultUI };
+      }
+    }
+
+    function saveUI() {
+      const data = {
+        shiftMode: els.shiftMode.value,
+        recordDate: els.recordDate.value,
+        manualFinishTime: els.manualFinishTime.value,
+        manualExtraBreakMinutes: Number(els.manualExtraBreakMinutes.value || 0)
+      };
+      setStorageValue(UI_STORAGE_KEY, JSON.stringify(data), LEGACY_STORAGE_KEYS.ui);
+    }
+
+    function loadDailyRecords() {
+      try {
+        const raw = getStorageValue(DAILY_RECORD_KEY, LEGACY_STORAGE_KEYS.dailyRecords);
+        return raw ? JSON.parse(raw) : {};
+      } catch {
+        return {};
+      }
+    }
+
+    function saveDailyRecords(records) {
+      setStorageValue(DAILY_RECORD_KEY, JSON.stringify(records), LEGACY_STORAGE_KEYS.dailyRecords);
+    }
+
+    function loadAnnualLeaveState() {
+      try {
+        const raw = getStorageValue(ANNUAL_LEAVE_STATE_KEY, LEGACY_STORAGE_KEYS.annualLeave);
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function saveAnnualLeaveState(state) {
+      setStorageValue(ANNUAL_LEAVE_STATE_KEY, JSON.stringify(state), LEGACY_STORAGE_KEYS.annualLeave);
+    }
+
+    function getStorageValue(primaryKey, legacyKey) {
+      const currentValue = localStorage.getItem(primaryKey);
+      if (currentValue !== null) {
+        return currentValue;
+      }
+
+      if (!legacyKey) {
+        return null;
+      }
+
+      const legacyValue = localStorage.getItem(legacyKey);
+      if (legacyValue === null) {
+        return null;
+      }
+
+      localStorage.setItem(primaryKey, legacyValue);
+      localStorage.removeItem(legacyKey);
+      return legacyValue;
+    }
+
+    function setStorageValue(primaryKey, value, legacyKey) {
+      localStorage.setItem(primaryKey, value);
+      if (legacyKey) {
+        localStorage.removeItem(legacyKey);
+      }
+    }
+
+    function formatDateInput(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function parseDateInput(dateStr) {
+      return new Date(`${dateStr}T00:00:00`);
+    }
+
+    function addMonths(baseDate, months) {
+      const d = new Date(baseDate);
+      const day = d.getDate();
+      d.setMonth(d.getMonth() + months);
+      if (d.getDate() < day) d.setDate(0);
+      return d;
+    }
+
+    function firstDayOfNextMonth(date) {
+      return new Date(date.getFullYear(), date.getMonth() + 1, 1);
+    }
+
+    function getAnnualLeaveGrantSchedule() {
+      const join = parseDateInput(APP_CONFIG.joinDate);
+      return ANNUAL_LEAVE_GRANT_RULES.map((rule) => ({
+        date: formatDateInput(addMonths(join, rule.months)),
+        days: rule.days
+      }));
+    }
+
+    function getDefaultAnnualLeaveState() {
+      return {
+        remainingDays: Number(ANNUAL_LEAVE_BASELINE.remainingDays || 0),
+        appliedGrantDates: [],
+        baselineDate: ANNUAL_LEAVE_BASELINE.date
+      };
+    }
+
+    function normalizeAnnualLeaveState(state) {
+      return {
+        remainingDays: Number(state?.remainingDays ?? ANNUAL_LEAVE_BASELINE.remainingDays ?? 0),
+        appliedGrantDates: Array.isArray(state?.appliedGrantDates) ? [...state.appliedGrantDates] : [],
+        baselineDate: state?.baselineDate || ANNUAL_LEAVE_BASELINE.date
+      };
+    }
+
+    function applyAnnualLeaveGrants(state, referenceDateStr = formatDateInput(new Date())) {
+      const nextState = normalizeAnnualLeaveState(state);
+      const applied = new Set(nextState.appliedGrantDates);
+
+      getAnnualLeaveGrantSchedule().forEach((grant) => {
+        if (grant.date <= nextState.baselineDate) return;
+        if (grant.date > referenceDateStr) return;
+        if (applied.has(grant.date)) return;
+
+        nextState.remainingDays += Number(grant.days || 0);
+        nextState.appliedGrantDates.push(grant.date);
+        applied.add(grant.date);
+      });
+
+      return nextState;
+    }
+
+    function getAnnualLeaveState(referenceDateStr = formatDateInput(new Date())) {
+      const loaded = loadAnnualLeaveState() || getDefaultAnnualLeaveState();
+      const nextState = applyAnnualLeaveGrants(loaded, referenceDateStr);
+      const loadedSerialized = JSON.stringify(normalizeAnnualLeaveState(loaded));
+      const nextSerialized = JSON.stringify(normalizeAnnualLeaveState(nextState));
+
+      if (loadedSerialized !== nextSerialized) {
+        saveAnnualLeaveState(nextState);
+      }
+
+      return nextState;
+    }
+
+    function getStageStart(join, rule) {
+      if (rule.startType === 'join') return new Date(join);
+      if (rule.startType === 'plusMonths') return addMonths(join, rule.months);
+      if (rule.startType === 'nextMonthAfterMonths') return firstDayOfNextMonth(addMonths(join, rule.months));
+      return new Date(join);
+    }
+
+    function getWageStage(baseDate) {
+      const join = parseDateInput(APP_CONFIG.joinDate);
+
+      if (Number.isNaN(join.getTime()) || baseDate < join) {
+        return {
+          label: '初回',
+          wage: Number(APP_CONFIG.wages.wageInitial || 0)
+        };
+      }
+
+      const stages = WAGE_STAGE_RULES.map((rule) => ({
+        key: rule.key,
+        label: rule.label,
+        start: getStageStart(join, rule)
+      }));
+
+      let current = stages[0];
+      for (const stage of stages) {
+        if (baseDate >= stage.start) current = stage;
+        else break;
+      }
+
+      return {
+        label: current.label,
+        wage: Number(APP_CONFIG.wages[current.key] || 0)
+      };
+    }
+
+    function getAutoShiftType(dateStr) {
+      if (!dateStr) return 'off';
+      for (const [start, end] of AUTO_SHIFT_RANGES.first) {
+        if (dateStr >= start && dateStr <= end) return 'first';
+      }
+      for (const [start, end] of AUTO_SHIFT_RANGES.second) {
+        if (dateStr >= start && dateStr <= end) return 'second';
+      }
+      return 'off';
+    }
+
+    function resolveShiftTypeForDate(dateStr, selectedMode) {
+      return selectedMode === 'auto' ? getAutoShiftType(dateStr) : selectedMode;
+    }
+
+    function getRecommendedWorkDate(now, selectedMode) {
+      const current = formatDateInput(now);
+
+      if (selectedMode === 'second' && now.getHours() < 8) {
+        const prev = new Date(now);
+        prev.setDate(prev.getDate() - 1);
+        return formatDateInput(prev);
+      }
+
+      if (selectedMode === 'auto' && now.getHours() < 8) {
+        const prev = new Date(now);
+        prev.setDate(prev.getDate() - 1);
+        const prevDate = formatDateInput(prev);
+        if (getAutoShiftType(prevDate) === 'second') return prevDate;
+      }
+
+      return current;
+    }
+
+    function getRegularEndTime(mode, recordDate) {
+      const resolved = resolveShiftTypeForDate(recordDate, mode);
+      if (resolved === 'first') return '15:10';
+      if (resolved === 'second') return '01:25';
+      if (resolved === 'holiday') return '15:10';
+      return '';
+    }
+
+    function applyRegularFinishTime(force = false) {
+      const recordDate = els.recordDate.value || getRecommendedWorkDate(new Date(), els.shiftMode.value);
+      if (!els.recordDate.value) els.recordDate.value = recordDate;
+
+      const regular = getRegularEndTime(els.shiftMode.value, recordDate);
+      if (force || !els.manualFinishTime.value) {
+        els.manualFinishTime.value = regular;
+      }
+      saveUI();
+    }
+
+    function getShiftConfig(shiftType) {
+      return SHIFT_PRESETS[shiftType] || SHIFT_PRESETS.first;
+    }
+
+    function getEffectiveShiftSettings(resolvedShiftType) {
+      const shift = getShiftConfig(resolvedShiftType);
+      return {
+        shift,
+        baseSegments: Array.isArray(shift.baseSegments) ? shift.baseSegments : [],
+        overtimeEndTime: shift.overtimeEndTime,
+        overtimeBreaks: Array.isArray(shift.overtimeBreaks) ? shift.overtimeBreaks : []
+      };
+    }
+
+    function parseTimeToMinutes(timeStr) {
+      const [h, m] = String(timeStr || '00:00').split(':').map(Number);
+      return (h * 60) + m;
+    }
+
+    function getOfficialSpan(shift) {
+      const start = parseTimeToMinutes(shift.start);
+      let end = parseTimeToMinutes(shift.end);
+      if (end <= start) end += 24 * 60;
+      return { start, end, span: end - start };
+    }
+
+    function adjustTimeForShift(timeStr, officialStart, overnight) {
+      if (!timeStr) return null;
+      let minutes = parseTimeToMinutes(timeStr);
+      if (overnight && minutes < officialStart) minutes += 24 * 60;
+      return minutes;
+    }
+
+    function buildClockSegments(segmentRanges, officialStart, overnight, kind) {
+      return segmentRanges
+        .map(([startTime, endTime]) => ({
+          start: adjustTimeForShift(startTime, officialStart, overnight),
+          end: adjustTimeForShift(endTime, officialStart, overnight),
+          kind
+        }))
+        .filter((seg) => seg.start !== null && seg.end !== null && seg.end > seg.start);
+    }
+
+    function sumSegmentMinutes(segments) {
+      return segments.reduce((sum, seg) => sum + Math.max(0, seg.end - seg.start), 0);
+    }
+
+    function subtractBreaksFromSegments(segments, breaks) {
+      let result = [...segments];
+
+      breaks.forEach((br) => {
+        if (!br || br.end <= br.start) return;
+
+        const next = [];
+        result.forEach((seg) => {
+          if (br.end <= seg.start || br.start >= seg.end) {
+            next.push(seg);
+            return;
+          }
+          if (br.start > seg.start) next.push({ start: seg.start, end: br.start, kind: seg.kind });
+          if (br.end < seg.end) next.push({ start: br.end, end: seg.end, kind: seg.kind });
+        });
+        result = next;
+      });
+
+      return result.filter((seg) => seg.end > seg.start);
+    }
+
+    function buildPaidSegments(resolvedShiftType, overrideEndTime = null, options = {}) {
+      const effective = getEffectiveShiftSettings(resolvedShiftType);
+      const shift = effective.shift;
+      const liveUntilTime = options.liveUntilTime || null;
+
+      if (resolvedShiftType === 'off') {
+        return {
+          shift,
+          officialStart: null,
+          officialEnd: null,
+          basePayMinutes: 0,
+          fixedEarlyOtMinutes: 0,
+          overtimePaidMinutes: 0,
+          totalPaidMinutes: 0,
+          segments: [],
+          firstPaidStart: null,
+          lastPaidEnd: null,
+          overtimeConfigured: false,
+          overtimeUnknown: false,
+          effective
+        };
+      }
+
+      const official = getOfficialSpan(shift);
+      const overnight = official.end > 24 * 60;
+      const cutoffMinutes = overrideEndTime !== null
+        ? adjustTimeForShift(overrideEndTime, official.start, overnight)
+        : null;
+      const baseKind = resolvedShiftType === 'holiday' ? 'overtime' : 'official';
+      const baseSegments = buildClockSegments(effective.baseSegments, official.start, overnight, baseKind);
+      const basePayMinutes = sumSegmentMinutes(baseSegments);
+      let segments = [];
+
+      if (shift.fixedEarlyOtMinutes > 0) {
+        segments.push({
+          start: official.start - shift.fixedEarlyOtMinutes,
+          end: official.start,
+          kind: 'early'
+        });
+      }
+
+      segments.push(...baseSegments);
+
+      if (cutoffMinutes !== null) {
+        segments = clipSegmentsToCutoff(segments, cutoffMinutes);
+      }
+
+      let overtimeConfigured = resolvedShiftType === 'holiday';
+      let overtimeUnknown = resolvedShiftType === 'second' && !effective.overtimeEndTime;
+
+      if (resolvedShiftType !== 'holiday') {
+        const overtimeStart = official.end;
+        const overtimeEndSource = overrideEndTime !== null
+          ? overrideEndTime
+          : (effective.overtimeEndTime || liveUntilTime || null);
+        const overtimeEnd = adjustTimeForShift(overtimeEndSource, official.start, overnight);
+
+        if (overtimeEnd && overtimeEnd > overtimeStart) {
+          overtimeConfigured = true;
+          let overtimeSegments = [{ start: overtimeStart, end: overtimeEnd, kind: 'overtime' }];
+          const overtimeBreaks = effective.overtimeBreaks
+            .map(([startTime, endTime]) => ({
+              start: adjustTimeForShift(startTime, official.start, overnight),
+              end: adjustTimeForShift(endTime, official.start, overnight)
+            }))
+            .filter((br) => br.start !== null && br.end !== null && br.end > br.start);
+
+          overtimeSegments = subtractBreaksFromSegments(overtimeSegments, overtimeBreaks);
+          segments.push(...overtimeSegments);
+        }
+      }
+
+      segments.sort((a, b) => a.start - b.start);
+      const totalPaidMinutes = sumSegmentMinutes(segments);
+      const actualEarlyOtMinutes = sumSegmentMinutes(segments.filter((seg) => seg.kind === 'early'));
+      const overtimePaidMinutes = resolvedShiftType === 'holiday'
+        ? totalPaidMinutes
+        : sumSegmentMinutes(segments.filter((seg) => seg.kind === 'overtime'));
+
+      return {
+        shift,
+        officialStart: official.start,
+        officialEnd: official.end,
+        basePayMinutes,
+        fixedEarlyOtMinutes: actualEarlyOtMinutes,
+        overtimePaidMinutes,
+        totalPaidMinutes,
+        segments,
+        firstPaidStart: segments.length ? segments[0].start : null,
+        lastPaidEnd: segments.length ? segments[segments.length - 1].end : null,
+        overtimeConfigured,
+        overtimeUnknown,
+        effective
+      };
+    }
+
+    function getAdjustedNowMinutes(now, schedule) {
+      let nowMinutes = now.getHours() * 60 + now.getMinutes() + (now.getSeconds() / 60);
+      const overnight = schedule.lastPaidEnd > 24 * 60;
+      if (overnight && nowMinutes < schedule.firstPaidStart) nowMinutes += 24 * 60;
+      return nowMinutes;
+    }
+
+    function clipSegmentsToCutoff(segments, cutoffMinutes) {
+      return segments
+        .map((seg) => ({ ...seg, end: Math.min(seg.end, cutoffMinutes) }))
+        .filter((seg) => cutoffMinutes > seg.start && seg.end > seg.start);
+    }
+
+    function trimSegmentsFromEnd(segments, trimMinutes) {
+      let remain = Math.max(0, trimMinutes || 0);
+      const cloned = segments.map((seg) => ({ ...seg }));
+
+      for (let i = cloned.length - 1; i >= 0 && remain > 0; i -= 1) {
+        const seg = cloned[i];
+        const len = seg.end - seg.start;
+        if (len <= remain) {
+          remain -= len;
+          seg.end = seg.start;
+        } else {
+          seg.end -= remain;
+          remain = 0;
+        }
+      }
+
+      return cloned.filter((seg) => seg.end > seg.start);
+    }
+
+    function getNightOverlapMinutes(start, end) {
+      const windows = [
+        [1320, 1440],
+        [1440, 1740]
+      ];
+
+      let total = 0;
+      windows.forEach(([wStart, wEnd]) => {
+        total += Math.max(0, Math.min(end, wEnd) - Math.max(start, wStart));
+      });
+      return total;
+    }
+
+    function getTimeBandOverlapMinutes(start, end) {
+      const windows = [
+        [0, 480],
+        [1045, 1920]
+      ];
+
+      let total = 0;
+      windows.forEach(([wStart, wEnd]) => {
+        total += Math.max(0, Math.min(end, wEnd) - Math.max(start, wStart));
+      });
+      return total;
+    }
+
+    function getBreakdownFromSegments(segments) {
+      let paidMinutes = 0;
+      let regularMinutes = 0;
+      let overtimeMinutes = 0;
+      let nightMinutes = 0;
+      let timeBandMinutes = 0;
+
+      segments.forEach((seg) => {
+        const len = seg.end - seg.start;
+        if (len <= 0) return;
+
+        paidMinutes += len;
+
+        if (seg.kind === 'official') {
+          regularMinutes += len;
+        }
+
+        if (seg.kind === 'early' || seg.kind === 'overtime') {
+          overtimeMinutes += len;
+        }
+
+        nightMinutes += getNightOverlapMinutes(seg.start, seg.end);
+        timeBandMinutes += getTimeBandOverlapMinutes(seg.start, seg.end);
+      });
+
+      return { paidMinutes, regularMinutes, overtimeMinutes, nightMinutes, timeBandMinutes };
+    }
+
+    function withTimeBandMinutes(shiftType, breakdown) {
+      return {
+        ...breakdown,
+        timeBandMinutes: Number(breakdown?.timeBandMinutes || 0)
+      };
+    }
+
+    function getCurrentElapsedBreakdown(now, schedule) {
+      if (!schedule.segments.length) {
+        return { paidMinutes: 0, regularMinutes: 0, overtimeMinutes: 0, nightMinutes: 0, timeBandMinutes: 0 };
+      }
+
+      const adjustedNow = getAdjustedNowMinutes(now, schedule);
+      if (adjustedNow <= schedule.firstPaidStart) {
+        return { paidMinutes: 0, regularMinutes: 0, overtimeMinutes: 0, nightMinutes: 0, timeBandMinutes: 0 };
+      }
+
+      const clipped = clipSegmentsToCutoff(schedule.segments, adjustedNow);
+      return getBreakdownFromSegments(clipped);
+    }
+
+    function getBreakdownForRecord(record) {
+      if (!record || record.type === 'off' || record.shiftType === 'off') {
+        return { paidMinutes: 0, regularMinutes: 0, overtimeMinutes: 0, nightMinutes: 0, timeBandMinutes: 0 };
+      }
+
+      if (isPaidLeaveRecord(record)) {
+        return { paidMinutes: 0, regularMinutes: 0, overtimeMinutes: 0, nightMinutes: 0, timeBandMinutes: 0 };
+      }
+
+      if (record.type === 'finish' && typeof record.endLabel === 'string' && record.endLabel.includes(':')) {
+        const schedule = buildPaidSegments(record.shiftType, record.endLabel);
+        let segments = schedule.segments;
+
+        if (Number(record.extraBreakMinutes || 0) > 0) {
+          segments = trimSegmentsFromEnd(segments, Number(record.extraBreakMinutes || 0));
+        }
+
+        return withTimeBandMinutes(record.shiftType, getBreakdownFromSegments(segments));
+      }
+
+      if (
+        typeof record.paidMinutes === 'number' &&
+        typeof record.overtimeMinutes === 'number' &&
+        typeof record.nightMinutes === 'number' &&
+        typeof record.timeBandMinutes === 'number'
+      ) {
+        const paidMinutes = Number(record.paidMinutes || 0);
+        const overtimeMinutes = Number(record.overtimeMinutes || 0);
+        return {
+          paidMinutes,
+          regularMinutes: Math.max(
+            0,
+            record.shiftType === 'holiday' ? 0 : paidMinutes - overtimeMinutes
+          ),
+          overtimeMinutes,
+          nightMinutes: Number(record.nightMinutes || 0),
+          timeBandMinutes: Number(record.timeBandMinutes || 0)
+        };
+      }
+
+      const schedule = buildPaidSegments(record.shiftType, record.endLabel || null);
+      let segments = schedule.segments;
+      if (Number(record.extraBreakMinutes || 0) > 0) {
+        segments = trimSegmentsFromEnd(segments, Number(record.extraBreakMinutes || 0));
+      }
+      return withTimeBandMinutes(record.shiftType, getBreakdownFromSegments(segments));
+    }
+
+    function computeElapsedPaidMinutes(now, schedule) {
+      const breakdown = getCurrentElapsedBreakdown(now, schedule);
+
+      if (!schedule.segments.length) {
+        return { state: 'off', elapsedPaidMinutes: 0 };
+      }
+
+      const adjustedNow = getAdjustedNowMinutes(now, schedule);
+      if (adjustedNow < schedule.firstPaidStart) {
+        return { state: 'before', elapsedPaidMinutes: 0 };
+      }
+      if (adjustedNow >= schedule.lastPaidEnd) {
+        return { state: 'after', elapsedPaidMinutes: breakdown.paidMinutes };
+      }
+
+      return { state: 'working', elapsedPaidMinutes: breakdown.paidMinutes };
+    }
+
+    function getGrossForRegularMinutes(recordDate, shiftType, regularMinutes, includeDailyAllowance = true) {
+      if (!recordDate || shiftType === 'off') return 0;
+      const stage = getWageStage(parseDateInput(recordDate));
+      const schedule = buildPaidSegments(shiftType);
+      const officialMinutes = Math.max(0, Number(schedule.basePayMinutes || 0));
+      const clampedRegularMinutes = Math.max(0, Math.min(officialMinutes, Number(regularMinutes || 0)));
+      const minuteRate = officialMinutes > 0 ? stage.wage / officialMinutes : 0;
+      const dailyAllowance = includeDailyAllowance ? Number(APP_CONFIG.dailyAllowance || 0) : 0;
+      return (clampedRegularMinutes * minuteRate) + dailyAllowance;
+    }
+
+    function roundAllowanceYen(value) {
+      // 要確認: 手当の端数処理は明細上、10円単位四捨五入の可能性が高い。
+      return Math.round(Number(value || 0) / 10) * 10;
+    }
+
+    function getPaySummary(recordDate, shiftType, breakdown, options = {}) {
+      if (!recordDate || shiftType === 'off') {
+        return {
+          baseGross: 0,
+          overtimePay: 0,
+          nightPay: 0,
+          timeBandPay: 0,
+          totalPay: 0
+        };
+      }
+
+      if (shiftType === 'paidLeave') {
+        return {
+          baseGross: PAID_LEAVE_DAILY_PAY,
+          overtimePay: 0,
+          nightPay: 0,
+          timeBandPay: 0,
+          totalPay: PAID_LEAVE_DAILY_PAY
+        };
+      }
+
+      const includeDailyAllowance = options.includeDailyAllowance !== false;
+      const safeBreakdown = withTimeBandMinutes(shiftType, {
+        paidMinutes: Number(breakdown?.paidMinutes || 0),
+        regularMinutes: Number(
+          breakdown?.regularMinutes ?? Math.max(0, Number(breakdown?.paidMinutes || 0) - Number(breakdown?.overtimeMinutes || 0))
+        ),
+        overtimeMinutes: Number(breakdown?.overtimeMinutes || 0),
+        nightMinutes: Number(breakdown?.nightMinutes || 0),
+        timeBandMinutes: Number(breakdown?.timeBandMinutes || 0)
+      });
+      const baseGross = getGrossForRegularMinutes(
+        recordDate,
+        shiftType,
+        safeBreakdown.regularMinutes,
+        includeDailyAllowance
+      );
+      const overtimePay = roundAllowanceYen(
+        safeBreakdown.overtimeMinutes * APP_CONFIG.allowanceRates.overtimePerMin
+      );
+      const nightPay = roundAllowanceYen(
+        safeBreakdown.nightMinutes * APP_CONFIG.allowanceRates.nightPerMin
+      );
+      const timeBandPay = roundAllowanceYen(
+        safeBreakdown.timeBandMinutes * APP_CONFIG.allowanceRates.timeBandPerMin
+      );
+
+      return {
+        baseGross,
+        overtimePay,
+        nightPay,
+        timeBandPay,
+        totalPay: baseGross + overtimePay + nightPay + timeBandPay
+      };
+    }
+
+    function getMonthToDateTotals(currentWorkDate, currentBreakdown, currentTotalPay, currentRecord, records) {
+      const monthKey = currentWorkDate.slice(0, 7);
+
+      let totalPay = 0;
+      let overtimeMinutes = 0;
+      let nightMinutes = 0;
+      let timeBandMinutes = 0;
+
+      Object.values(records).forEach((record) => {
+        if (!record || !record.recordDate) return;
+        if (!record.recordDate.startsWith(monthKey)) return;
+        if (record.recordDate > currentWorkDate) return;
+        if (record.recordDate === currentWorkDate) return;
+        if (record.type === 'off' || record.shiftType === 'off') return;
+
+        const breakdown = getBreakdownForRecord(record);
+        totalPay += getPaySummary(record.recordDate, record.shiftType, breakdown).totalPay;
+        overtimeMinutes += breakdown.overtimeMinutes;
+        nightMinutes += breakdown.nightMinutes;
+        timeBandMinutes += breakdown.timeBandMinutes;
+      });
+
+      if (currentRecord) {
+        if (currentRecord.type !== 'off' && currentRecord.shiftType !== 'off') {
+          const breakdown = getBreakdownForRecord(currentRecord);
+          totalPay += getPaySummary(currentRecord.recordDate, currentRecord.shiftType, breakdown).totalPay;
+          overtimeMinutes += breakdown.overtimeMinutes;
+          nightMinutes += breakdown.nightMinutes;
+          timeBandMinutes += breakdown.timeBandMinutes;
+        }
+      } else {
+        totalPay += currentTotalPay;
+        overtimeMinutes += currentBreakdown.overtimeMinutes;
+        nightMinutes += currentBreakdown.nightMinutes;
+        timeBandMinutes += currentBreakdown.timeBandMinutes;
+      }
+
+      return { totalPay, overtimeMinutes, nightMinutes, timeBandMinutes };
+    }
+
+    function formatTimeJP(date) {
+      return new Intl.DateTimeFormat('ja-JP', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      }).format(date);
+    }
+
+    function formatDateJP(date) {
+      return new Intl.DateTimeFormat('ja-JP', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        weekday: 'short'
+      }).format(date);
+    }
+
+    function formatMinutesAsHourMin(totalMinutes) {
+      const mins = Math.max(0, Math.round(totalMinutes || 0));
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      return `${h}時間${String(m).padStart(2, '0')}分`;
+    }
+
+    function formatTimeShort(date) {
+      return new Intl.DateTimeFormat('ja-JP', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      }).format(date);
+    }
+
+    function yen(value) {
+      return new Intl.NumberFormat('ja-JP', {
+        style: 'currency',
+        currency: 'JPY',
+        maximumFractionDigits: 0
+      }).format(Math.max(0, value || 0));
+    }
+
+    function formatDays(value) {
+      return `${Math.max(0, Number(value || 0))}日`;
+    }
+
+    function flashButton(button, text) {
+      const original = button.textContent;
+      button.textContent = text;
+      setTimeout(() => {
+        button.textContent = original;
+      }, 1200);
+    }
+
+    function isPaidLeaveRecord(record) {
+      return Boolean(record && (record.type === 'paidLeave' || record.shiftType === 'paidLeave'));
+    }
+
+    function commitRecordChange(recordDate, nextRecord, options = {}) {
+      const records = loadDailyRecords();
+      const previousRecord = records[recordDate] || null;
+      const annualLeaveState = getAnnualLeaveState(options.referenceDateStr);
+      const wasPaidLeave = isPaidLeaveRecord(previousRecord);
+      const willBePaidLeave = isPaidLeaveRecord(nextRecord);
+
+      if (!wasPaidLeave && willBePaidLeave && annualLeaveState.remainingDays <= 0) {
+        return {
+          ok: false,
+          reason: 'no-balance',
+          previousRecord,
+          annualLeaveState
+        };
+      }
+
+      if (wasPaidLeave && !willBePaidLeave) {
+        annualLeaveState.remainingDays += 1;
+      } else if (!wasPaidLeave && willBePaidLeave) {
+        annualLeaveState.remainingDays -= 1;
+      }
+
+      if (nextRecord) {
+        records[recordDate] = nextRecord;
+      } else {
+        delete records[recordDate];
+      }
+
+      saveDailyRecords(records);
+      saveAnnualLeaveState(annualLeaveState);
+
+      return {
+        ok: true,
+        previousRecord,
+        annualLeaveState
+      };
+    }
+
+    function recordCurrentFinish() {
+      const now = new Date();
+      const nowLabel = formatTimeShort(now);
+      const referenceDateStr = formatDateInput(now);
+      const mode = els.shiftMode.value;
+      const currentWorkDate = getRecommendedWorkDate(now, mode);
+      const resolvedShiftType = resolveShiftTypeForDate(currentWorkDate, mode);
+      const stage = getWageStage(parseDateInput(currentWorkDate));
+
+      if (resolvedShiftType === 'off') {
+        flashButton(els.recordNowBtn, '休み');
+        return;
+      }
+      if (!stage.wage) {
+        flashButton(els.recordNowBtn, '日給');
+        return;
+      }
+
+      const plannedSchedule = buildPaidSegments(resolvedShiftType);
+      const elapsed = computeElapsedPaidMinutes(now, plannedSchedule);
+
+      if (elapsed.state === 'before') {
+        flashButton(els.recordNowBtn, '勤務前');
+        return;
+      }
+
+      const finishSchedule = buildPaidSegments(resolvedShiftType, nowLabel, { liveUntilTime: nowLabel });
+      const breakdown = withTimeBandMinutes(resolvedShiftType, getBreakdownFromSegments(finishSchedule.segments));
+      const result = commitRecordChange(currentWorkDate, {
+        type: 'finish',
+        paidMinutes: breakdown.paidMinutes,
+        overtimeMinutes: breakdown.overtimeMinutes,
+        nightMinutes: breakdown.nightMinutes,
+        timeBandMinutes: breakdown.timeBandMinutes,
+        endLabel: nowLabel,
+        source: 'button',
+        extraBreakMinutes: 0,
+        shiftType: resolvedShiftType,
+        recordDate: currentWorkDate,
+        createdAt: now.toISOString()
+      }, { referenceDateStr });
+
+      if (!result.ok) {
+        flashButton(els.recordNowBtn, '残数');
+        return;
+      }
+
+      els.recordDate.value = currentWorkDate;
+      applyRegularFinishTime(false);
+      saveUI();
+      render();
+      flashButton(els.recordNowBtn, '保存');
+    }
+
+    function applyManualFinish() {
+      if (!els.recordDate.value) {
+        flashButton(els.applyManualBtn, '日付');
+        return;
+      }
+
+      const mode = els.shiftMode.value;
+      const resolvedShiftType = resolveShiftTypeForDate(els.recordDate.value, mode);
+
+      if (resolvedShiftType === 'off') {
+        flashButton(els.applyManualBtn, '休み');
+        return;
+      }
+      if (!els.manualFinishTime.value) {
+        flashButton(els.applyManualBtn, '時刻');
+        return;
+      }
+
+      const schedule = buildPaidSegments(resolvedShiftType, els.manualFinishTime.value);
+      let segments = schedule.segments;
+
+      const manualExtraBreak = Math.max(0, Number(els.manualExtraBreakMinutes.value || 0));
+      if (manualExtraBreak > 0) {
+        segments = trimSegmentsFromEnd(segments, manualExtraBreak);
+      }
+
+      const breakdown = withTimeBandMinutes(resolvedShiftType, getBreakdownFromSegments(segments));
+
+      const result = commitRecordChange(els.recordDate.value, {
+        type: 'finish',
+        paidMinutes: breakdown.paidMinutes,
+        overtimeMinutes: breakdown.overtimeMinutes,
+        nightMinutes: breakdown.nightMinutes,
+        timeBandMinutes: breakdown.timeBandMinutes,
+        endLabel: els.manualFinishTime.value,
+        source: 'manual',
+        extraBreakMinutes: manualExtraBreak,
+        shiftType: resolvedShiftType,
+        recordDate: els.recordDate.value,
+        createdAt: new Date().toISOString()
+      });
+
+      if (!result.ok) {
+        flashButton(els.applyManualBtn, '残数');
+        return;
+      }
+
+      saveUI();
+      render();
+      flashButton(els.applyManualBtn, '保存');
+    }
+
+    function markDayOff() {
+      if (!els.recordDate.value) {
+        flashButton(els.markOffBtn, '日付');
+        return;
+      }
+
+      const result = commitRecordChange(els.recordDate.value, {
+        type: 'off',
+        paidMinutes: 0,
+        overtimeMinutes: 0,
+        nightMinutes: 0,
+        timeBandMinutes: 0,
+        endLabel: '休み',
+        source: 'off',
+        extraBreakMinutes: 0,
+        shiftType: 'off',
+        recordDate: els.recordDate.value,
+        createdAt: new Date().toISOString()
+      });
+
+      if (!result.ok) {
+        flashButton(els.markOffBtn, '残数');
+        return;
+      }
+
+      saveUI();
+      render();
+      flashButton(els.markOffBtn, '保存');
+    }
+
+    function markAnnualLeave() {
+      if (!els.recordDate.value) {
+        flashButton(els.annualLeaveBtn, '日付');
+        return;
+      }
+
+      const records = loadDailyRecords();
+      const existingRecord = records[els.recordDate.value] || null;
+      if (isPaidLeaveRecord(existingRecord)) {
+        flashButton(els.annualLeaveBtn, '年休');
+        return;
+      }
+
+      const result = commitRecordChange(els.recordDate.value, {
+        type: 'paidLeave',
+        paidMinutes: 0,
+        overtimeMinutes: 0,
+        nightMinutes: 0,
+        timeBandMinutes: 0,
+        endLabel: '年休',
+        source: 'annualLeave',
+        extraBreakMinutes: 0,
+        shiftType: 'paidLeave',
+        recordDate: els.recordDate.value,
+        createdAt: new Date().toISOString()
+      });
+
+      if (!result.ok) {
+        flashButton(els.annualLeaveBtn, '残数');
+        return;
+      }
+
+      saveUI();
+      render();
+      flashButton(els.annualLeaveBtn, '保存');
+    }
+
+    function clearSelectedRecord() {
+      if (!els.recordDate.value) {
+        flashButton(els.clearRecordBtn, '日付');
+        return;
+      }
+
+      commitRecordChange(els.recordDate.value, null);
+      saveUI();
+      render();
+      flashButton(els.clearRecordBtn, '削除済み');
+    }
+
+    function render() {
+      const now = new Date();
+      const nowLabel = formatTimeShort(now);
+      const mode = els.shiftMode.value;
+      const currentWorkDate = getRecommendedWorkDate(now, mode);
+      const stage = getWageStage(parseDateInput(currentWorkDate));
+      const dailyWage = stage.wage;
+      const resolvedCurrentShiftType = resolveShiftTypeForDate(currentWorkDate, mode);
+      const schedule = buildPaidSegments(resolvedCurrentShiftType);
+      const liveSchedule = buildPaidSegments(resolvedCurrentShiftType, nowLabel, { liveUntilTime: nowLabel });
+      const elapsed = computeElapsedPaidMinutes(now, schedule);
+      const currentBreakdown = withTimeBandMinutes(
+        resolvedCurrentShiftType,
+        getBreakdownFromSegments(liveSchedule.segments)
+      );
+      const plannedCurrentBreakdown = withTimeBandMinutes(
+        resolvedCurrentShiftType,
+        getCurrentElapsedBreakdown(now, schedule)
+      );
+      const projectedBreakdown = withTimeBandMinutes(
+        resolvedCurrentShiftType,
+        getBreakdownFromSegments(schedule.segments)
+      );
+
+      const records = loadDailyRecords();
+      const currentRecord = records[currentWorkDate] || null;
+      const currentRecordIsOff = currentRecord && currentRecord.type === 'off';
+      const currentRecordIsPaidLeave = isPaidLeaveRecord(currentRecord);
+      const currentRecordBreakdown = currentRecord && !currentRecordIsOff
+        ? getBreakdownForRecord(currentRecord)
+        : null;
+      const annualLeaveState = getAnnualLeaveState(formatDateInput(now));
+      const effectivePaidMinutes = currentRecordBreakdown
+        ? currentRecordBreakdown.paidMinutes
+        : currentBreakdown.paidMinutes;
+      const currentPaySummary = (currentRecordIsOff || resolvedCurrentShiftType === 'off')
+        ? getPaySummary(currentWorkDate, 'off', null)
+        : currentRecordBreakdown
+          ? getPaySummary(currentRecord.recordDate, currentRecord.shiftType, currentRecordBreakdown)
+          : getPaySummary(currentWorkDate, resolvedCurrentShiftType, currentBreakdown, {
+            includeDailyAllowance: elapsed.state === 'after'
+          });
+      const isOpenEndedSecondOvertime = !currentRecord
+        && resolvedCurrentShiftType === 'second'
+        && currentBreakdown.paidMinutes > plannedCurrentBreakdown.paidMinutes;
+
+      const monthToDate = getMonthToDateTotals(
+        currentWorkDate,
+        currentBreakdown,
+        currentPaySummary.totalPay,
+        currentRecord,
+        records
+      );
+
+      const progress = currentRecordIsPaidLeave
+        ? 100
+        : (currentRecordIsOff || resolvedCurrentShiftType === 'off')
+        ? 0
+        : (schedule.totalPaidMinutes > 0 ? Math.min(100, (effectivePaidMinutes / schedule.totalPaidMinutes) * 100) : 0);
+
+      const overtimePayMonth = roundAllowanceYen(
+        monthToDate.overtimeMinutes * APP_CONFIG.allowanceRates.overtimePerMin
+      );
+      const nightPayMonth = roundAllowanceYen(
+        monthToDate.nightMinutes * APP_CONFIG.allowanceRates.nightPerMin
+      );
+      const timeBandPayMonth = roundAllowanceYen(
+        monthToDate.timeBandMinutes * APP_CONFIG.allowanceRates.timeBandPerMin
+      );
+
+      els.liveGrossPay.textContent = yen(currentPaySummary.totalPay);
+      els.liveCaption.textContent = `今月ここまで ${yen(monthToDate.totalPay)}`;
+      els.monthOvertimeText.textContent = formatMinutesAsHourMin(monthToDate.overtimeMinutes);
+      els.monthNightText.textContent = formatMinutesAsHourMin(monthToDate.nightMinutes);
+      els.monthTimeBandText.textContent = formatMinutesAsHourMin(monthToDate.timeBandMinutes);
+      els.annualLeaveBalanceText.textContent = formatDays(annualLeaveState.remainingDays);
+      els.monthOvertimePay.textContent = yen(overtimePayMonth);
+      els.monthNightPay.textContent = yen(nightPayMonth);
+      els.monthTimeBandPay.textContent = yen(timeBandPayMonth);
+      els.progressPercent.textContent = `${Math.round(progress)}%`;
+      els.progressBar.style.width = `${progress}%`;
+
+      if (!dailyWage) {
+        els.progressLabel.textContent = '勤務進捗';
+        els.shiftStatus.className = 'status off';
+        els.shiftStatus.innerHTML = '<span class="dot"></span><span>日給未設定</span>';
+      } else if (currentRecordIsPaidLeave) {
+        els.progressLabel.textContent = '勤務進捗';
+        els.shiftStatus.className = 'status';
+        els.shiftStatus.innerHTML = '<span class="dot"></span><span>年休</span>';
+      } else if (currentRecordIsOff || resolvedCurrentShiftType === 'off') {
+        els.progressLabel.textContent = '勤務進捗';
+        els.shiftStatus.className = 'status off';
+        els.shiftStatus.innerHTML = '<span class="dot"></span><span>休み</span>';
+      } else if (currentRecord) {
+        els.progressLabel.textContent = '勤務進捗';
+        els.shiftStatus.className = 'status';
+        els.shiftStatus.innerHTML = '<span class="dot"></span><span>記録済み</span>';
+      } else if (elapsed.state === 'before') {
+        els.progressLabel.textContent = '始業まで';
+        els.shiftStatus.className = 'status wait';
+        els.shiftStatus.innerHTML = '<span class="dot"></span><span>勤務前</span>';
+      } else if (isOpenEndedSecondOvertime) {
+        els.progressLabel.textContent = '勤務進捗';
+        els.shiftStatus.className = 'status';
+        els.shiftStatus.innerHTML = '<span class="dot"></span><span>残業中（2直）</span>';
+      } else if (elapsed.state === 'after') {
+        els.progressLabel.textContent = '勤務進捗';
+        els.shiftStatus.className = 'status';
+        els.shiftStatus.innerHTML = '<span class="dot"></span><span>勤務終了</span>';
+      } else {
+        els.progressLabel.textContent = '勤務進捗';
+        els.shiftStatus.className = 'status';
+        els.shiftStatus.innerHTML = `<span class="dot"></span><span>${resolvedCurrentShiftType === 'holiday' ? '休日出勤' : (mode === 'auto' ? `自動：${schedule.shift.label}` : '勤務中')}</span>`;
+      }
+    }
+
+    function init() {
+      const ui = loadUI();
+      const now = new Date();
+
+      els.shiftMode.value = ui.shiftMode || 'auto';
+      els.recordDate.value = ui.recordDate || getRecommendedWorkDate(now, els.shiftMode.value);
+      els.manualFinishTime.value = ui.manualFinishTime || '';
+      els.manualExtraBreakMinutes.value = ui.manualExtraBreakMinutes || 0;
+
+      applyRegularFinishTime(false);
+
+      els.shiftMode.addEventListener('change', () => {
+        if (!els.recordDate.value) {
+          els.recordDate.value = getRecommendedWorkDate(new Date(), els.shiftMode.value);
+        }
+        applyRegularFinishTime(false);
+        saveUI();
+        render();
+      });
+
+      els.recordDate.addEventListener('change', () => {
+        if (!els.recordDate.value) {
+          els.recordDate.value = getRecommendedWorkDate(new Date(), els.shiftMode.value);
+        }
+        applyRegularFinishTime(true);
+        saveUI();
+        render();
+      });
+
+      [els.manualFinishTime, els.manualExtraBreakMinutes].forEach((el) => {
+        el.addEventListener('input', () => {
+          saveUI();
+          render();
+        });
+        el.addEventListener('change', () => {
+          saveUI();
+          render();
+        });
+      });
+
+      els.recordNowBtn.addEventListener('click', recordCurrentFinish);
+      els.applyManualBtn.addEventListener('click', applyManualFinish);
+      els.markOffBtn.addEventListener('click', markDayOff);
+      els.clearRecordBtn.addEventListener('click', clearSelectedRecord);
+      els.annualLeaveBtn.addEventListener('click', markAnnualLeave);
+
+      render();
+      setInterval(render, 1000);
+    }
+
+    init();
+  </script>
+</body>
+</html>
