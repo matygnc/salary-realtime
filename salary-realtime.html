@@ -319,6 +319,10 @@
       grid-template-columns: 1fr;
     }
 
+    .btn-row.duo-mobile {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .action-main {
       background: linear-gradient(135deg, rgba(139, 92, 246, 0.24), rgba(192, 132, 252, 0.18));
       border: 1px solid rgba(192, 132, 252, 0.35);
@@ -425,6 +429,10 @@
       .row.duo-mobile {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
+
+      .btn-row.duo-mobile {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
     }
 
     @supports (-webkit-touch-callout: none) {
@@ -525,7 +533,7 @@
         <div class="btn-row single">
           <button class="secondary action-main" id="applyManualBtn">手入力反映</button>
         </div>
-        <div class="btn-row">
+        <div class="btn-row duo-mobile">
           <button class="secondary" id="annualLeaveBtn">年休使用</button>
           <button class="secondary" id="markOffBtn">休みにする</button>
         </div>
