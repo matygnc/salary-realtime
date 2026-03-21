@@ -248,6 +248,10 @@
       grid-template-columns: 1fr;
     }
 
+    .row.duo-mobile {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     label {
       display: block;
       font-size: 12px;
@@ -279,6 +283,12 @@
       inline-size: 100%;
       max-inline-size: 100%;
       min-inline-size: 0;
+    }
+
+    .row.duo-mobile input[type="date"],
+    .row.duo-mobile input[type="time"] {
+      padding-inline: 12px;
+      font-size: 16px;
     }
 
     input::placeholder { color: #94a3b8; }
@@ -411,6 +421,10 @@
       .row, .btn-row {
         grid-template-columns: 1fr;
       }
+
+      .row.duo-mobile {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
     }
 
     @supports (-webkit-touch-callout: none) {
@@ -471,7 +485,7 @@
       </div>
 
       <div class="form-grid">
-        <div class="row">
+        <div class="row single">
           <div>
             <label for="shiftMode">勤務モード</label>
             <select id="shiftMode">
@@ -482,23 +496,24 @@
               <option value="off">休み固定</option>
             </select>
           </div>
+        </div>
+
+        <div class="row duo-mobile">
           <div>
             <label for="recordDate">対象日</label>
             <input id="recordDate" type="date" />
+          </div>
+          <div>
+            <label for="manualFinishTime">終了時刻</label>
+            <input id="manualFinishTime" type="time" />
           </div>
         </div>
 
         <div class="row">
           <div>
-            <label for="manualFinishTime">終了時刻</label>
-            <input id="manualFinishTime" type="time" />
-          </div>
-          <div>
             <label for="manualExtraBreakMinutes">追加休憩（分）</label>
             <input id="manualExtraBreakMinutes" type="number" inputmode="numeric" placeholder="0" />
           </div>
-        </div>
-        <div class="row single">
           <div>
             <label for="manualExtraOvertimeMinutes">追加残業（分）</label>
             <input id="manualExtraOvertimeMinutes" type="number" inputmode="numeric" placeholder="0" />
