@@ -441,6 +441,12 @@
             <input id="manualExtraBreakMinutes" type="number" inputmode="numeric" placeholder="0" />
           </div>
         </div>
+        <div class="row">
+          <div>
+            <label for="manualExtraOvertimeMinutes">追加残業（分）</label>
+            <input id="manualExtraOvertimeMinutes" type="number" inputmode="numeric" placeholder="0" />
+          </div>
+        </div>
       </div>
 
       <div class="action-stack">
@@ -477,18 +483,23 @@
             </div>
 
             <div class="mini">
+              <div class="mini-label">給料日まで</div>
+              <div class="mini-value" id="daysUntilPayrollText">0日</div>
+            </div>
+
+            <div class="mini">
               <div class="mini-label">総残業時間（今月）</div>
-              <div class="mini-value" id="monthOvertimeText">0時間00分</div>
+              <div class="mini-value" id="monthOvertimeText">0:00</div>
             </div>
 
             <div class="mini">
               <div class="mini-label">総深夜勤務時間（今月）</div>
-              <div class="mini-value" id="monthNightText">0時間00分</div>
+              <div class="mini-value" id="monthNightText">0:00</div>
             </div>
 
             <div class="mini full">
               <div class="mini-label">総時間帯手当勤務時間（今月分）</div>
-              <div class="mini-value" id="monthTimeBandText">0時間00分</div>
+              <div class="mini-value" id="monthTimeBandText">0:00</div>
             </div>
           </div>
         </div>
@@ -629,7 +640,7 @@
     const APP_CONFIG = {
       joinDate: '2024-04-16',
       payrollDay: 25,
-      // 要確認: 給料日は25日として仮置き。会社の実際の支給日が異なる場合は要修正。
+      // 要確認: 給料日は通常25日、土日なら直前の金曜として計算。祝日扱いは未確認。
       wages: {
         wageInitial: 10800,
         wageSecond: 11300,
@@ -850,6 +861,7 @@
       monthNightText: document.getElementById('monthNightText'),
       monthTimeBandText: document.getElementById('monthTimeBandText'),
       annualLeaveBalanceText: document.getElementById('annualLeaveBalanceText'),
+      daysUntilPayrollText: document.getElementById('daysUntilPayrollText'),
       monthOvertimePay: document.getElementById('monthOvertimePay'),
       monthNightPay: document.getElementById('monthNightPay'),
       monthTimeBandPay: document.getElementById('monthTimeBandPay'),
@@ -870,6 +882,7 @@
       shiftMode: document.getElementById('shiftMode'),
       recordDate: document.getElementById('recordDate'),
       manualFinishTime: document.getElementById('manualFinishTime'),
+      manualExtraOvertimeMinutes: document.getElementById('manualExtraOvertimeMinutes'),
       manualExtraBreakMinutes: document.getElementById('manualExtraBreakMinutes'),
       recordNowBtn: document.getElementById('recordNowBtn'),
       applyManualBtn: document.getElementById('applyManualBtn'),
@@ -882,8 +895,42 @@
       shiftMode: 'auto',
       recordDate: '',
       manualFinishTime: '',
+      manualExtraOvertimeMinutes: 0,
       manualExtraBreakMinutes: 0
     };
+
+    const REMOVED_SCHEDULE_ALLOWANCE_IDS = [
+      'contractMonthText',
+      'completionBonusDailyText',
+      'completionAwardDailyText',
+      'monthCompletionTotalPayText',
+      'completionPayoutInfoText',
+      'mealSubsidyText',
+      'familyAllowanceText',
+      'transferAllowanceText',
+      'experiencedAllowanceText',
+      'specialAllowanceText'
+    ];
+
+    function pruneScheduleAllowanceCards() {
+      REMOVED_SCHEDULE_ALLOWANCE_IDS.forEach((id) => {
+        document.getElementById(id)?.closest('.mini')?.remove();
+      });
+    }
+
+    function applyMonthlySummaryLabels() {
+      const labelMap = [
+        [els.monthOvertimeText, '残業時間（今月）'],
+        [els.monthNightText, '深夜勤務時間（今月）'],
+        [els.monthTimeBandText, '時間帯手当勤務時間（今月分）']
+      ];
+
+      labelMap.forEach(([valueEl, label]) => {
+        if (valueEl?.previousElementSibling) {
+          valueEl.previousElementSibling.textContent = label;
+        }
+      });
+    }
 
     function loadUI() {
       try {
@@ -899,6 +946,7 @@
         shiftMode: els.shiftMode.value,
         recordDate: els.recordDate.value,
         manualFinishTime: els.manualFinishTime.value,
+        manualExtraOvertimeMinutes: Number(els.manualExtraOvertimeMinutes.value || 0),
         manualExtraBreakMinutes: Number(els.manualExtraBreakMinutes.value || 0)
       };
       setStorageValue(UI_STORAGE_KEY, JSON.stringify(data), LEGACY_STORAGE_KEYS.ui);
@@ -1014,11 +1062,30 @@
 
     function getPayrollDateForMonth(monthStartDate) {
       const lastDay = new Date(monthStartDate.getFullYear(), monthStartDate.getMonth() + 1, 0).getDate();
-      return new Date(
+      const payrollDate = new Date(
         monthStartDate.getFullYear(),
         monthStartDate.getMonth(),
         Math.min(Number(APP_CONFIG.payrollDay || 25), lastDay)
       );
+
+      if (payrollDate.getDay() === 6) {
+        payrollDate.setDate(payrollDate.getDate() - 1);
+      } else if (payrollDate.getDay() === 0) {
+        payrollDate.setDate(payrollDate.getDate() - 2);
+      }
+
+      return payrollDate;
+    }
+
+    function getDaysUntilNextPayroll(referenceDate) {
+      const todayStart = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+      let nextPayrollDate = getPayrollDateForMonth(todayStart);
+
+      if (todayStart > nextPayrollDate) {
+        nextPayrollDate = getPayrollDateForMonth(new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 1));
+      }
+
+      return Math.max(0, Math.round((nextPayrollDate - todayStart) / (24 * 60 * 60 * 1000)));
     }
 
     function hasAutoShiftCoverage(dateStr) {
@@ -1269,7 +1336,8 @@
       const currentWorkDate = parseDateInput(referenceWorkDateStr);
       const referenceToday = parseDateInput(referenceTodayStr);
       const currentMonthKey = referenceWorkDateStr.slice(0, 7);
-      const payrollReached = referenceToday.getDate() >= Number(APP_CONFIG.payrollDay || 25);
+      const payrollDate = getPayrollDateForMonth(new Date(referenceToday.getFullYear(), referenceToday.getMonth(), 1));
+      const payrollReached = referenceToday >= payrollDate;
 
       let currentContractBonusPay = 0;
       let currentContractAwardPay = 0;
@@ -1938,7 +2006,7 @@
       const mins = Math.max(0, Math.round(totalMinutes || 0));
       const h = Math.floor(mins / 60);
       const m = mins % 60;
-      return `${h}時間${String(m).padStart(2, '0')}分`;
+      return `${h}:${String(m).padStart(2, '0')}`;
     }
 
     function formatTimeShort(date) {
@@ -1947,6 +2015,35 @@
         minute: '2-digit',
         hour12: false
       }).format(date);
+    }
+
+    function shiftTimeLabelByMinutes(timeLabel, addMinutes) {
+      const baseMinutes = parseTimeToMinutes(timeLabel);
+      const nextMinutes = ((baseMinutes + Math.max(0, Number(addMinutes || 0))) % (24 * 60) + (24 * 60)) % (24 * 60);
+      const hours = Math.floor(nextMinutes / 60);
+      const minutes = nextMinutes % 60;
+      return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    }
+
+    function formatMinutesAsTimeLabel(totalMinutes) {
+      const normalized = ((Math.floor(totalMinutes) % (24 * 60)) + (24 * 60)) % (24 * 60);
+      const hours = Math.floor(normalized / 60);
+      const minutes = normalized % 60;
+      return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    }
+
+    function normalizeOvertimeEndLabel(shiftType, endLabel) {
+      if (!endLabel || !SHIFT_DEFS[shiftType]) return endLabel;
+
+      const official = getOfficialSpan(SHIFT_DEFS[shiftType]);
+      const overnight = official.end > 24 * 60;
+      const adjustedEnd = adjustTimeForShift(endLabel, official.start, overnight);
+      if (adjustedEnd === null) return endLabel;
+
+      const shouldRoundDown = shiftType === 'holiday' || adjustedEnd > official.end;
+      if (!shouldRoundDown) return endLabel;
+
+      return formatMinutesAsTimeLabel(Math.floor(adjustedEnd / 5) * 5);
     }
 
     function yen(value) {
@@ -2013,7 +2110,10 @@
 
     function recordCurrentFinish() {
       const now = new Date();
-      const nowLabel = formatTimeShort(now);
+      const nowLabel = normalizeOvertimeEndLabel(
+        resolveShiftTypeForDate(getRecommendedWorkDate(now, els.shiftMode.value), els.shiftMode.value),
+        formatTimeShort(now)
+      );
       const referenceDateStr = formatDateInput(now);
       const mode = els.shiftMode.value;
       const currentWorkDate = getRecommendedWorkDate(now, mode);
@@ -2047,6 +2147,7 @@
         timeBandMinutes: breakdown.timeBandMinutes,
         endLabel: nowLabel,
         source: 'button',
+        extraOvertimeMinutes: 0,
         extraBreakMinutes: 0,
         shiftType: resolvedShiftType,
         recordDate: currentWorkDate,
@@ -2083,7 +2184,12 @@
         return;
       }
 
-      const schedule = buildPaidSegments(resolvedShiftType, els.manualFinishTime.value);
+      const manualExtraOvertime = Math.max(0, Number(els.manualExtraOvertimeMinutes.value || 0));
+      const effectiveFinishTime = normalizeOvertimeEndLabel(
+        resolvedShiftType,
+        shiftTimeLabelByMinutes(els.manualFinishTime.value, manualExtraOvertime)
+      );
+      const schedule = buildPaidSegments(resolvedShiftType, effectiveFinishTime);
       let segments = schedule.segments;
 
       const manualExtraBreak = Math.max(0, Number(els.manualExtraBreakMinutes.value || 0));
@@ -2099,8 +2205,9 @@
         overtimeMinutes: breakdown.overtimeMinutes,
         nightMinutes: breakdown.nightMinutes,
         timeBandMinutes: breakdown.timeBandMinutes,
-        endLabel: els.manualFinishTime.value,
+        endLabel: effectiveFinishTime,
         source: 'manual',
+        extraOvertimeMinutes: manualExtraOvertime,
         extraBreakMinutes: manualExtraBreak,
         shiftType: resolvedShiftType,
         recordDate: els.recordDate.value,
@@ -2279,6 +2386,7 @@
       els.monthNightText.textContent = formatMinutesAsHourMin(monthToDate.nightMinutes);
       els.monthTimeBandText.textContent = formatMinutesAsHourMin(monthToDate.timeBandMinutes);
       els.annualLeaveBalanceText.textContent = formatDays(annualLeaveState.remainingDays);
+      els.daysUntilPayrollText.textContent = formatDays(getDaysUntilNextPayroll(now));
       els.monthOvertimePay.textContent = yen(overtimePayMonth);
       els.monthNightPay.textContent = yen(nightPayMonth);
       els.monthTimeBandPay.textContent = yen(timeBandPayMonth);
@@ -2356,9 +2464,13 @@
       const ui = loadUI();
       const now = new Date();
 
+      pruneScheduleAllowanceCards();
+      applyMonthlySummaryLabels();
+
       els.shiftMode.value = ui.shiftMode || 'auto';
       els.recordDate.value = ui.recordDate || getRecommendedWorkDate(now, els.shiftMode.value);
       els.manualFinishTime.value = ui.manualFinishTime || '';
+      els.manualExtraOvertimeMinutes.value = ui.manualExtraOvertimeMinutes || 0;
       els.manualExtraBreakMinutes.value = ui.manualExtraBreakMinutes || 0;
 
       applyRegularFinishTime(false);
@@ -2381,7 +2493,7 @@
         render();
       });
 
-      [els.manualFinishTime, els.manualExtraBreakMinutes].forEach((el) => {
+      [els.manualFinishTime, els.manualExtraOvertimeMinutes, els.manualExtraBreakMinutes].forEach((el) => {
         el.addEventListener('input', () => {
           saveUI();
           render();
