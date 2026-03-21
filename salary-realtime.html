@@ -273,6 +273,14 @@
       border: 1px solid rgba(255,255,255,0.08);
     }
 
+    input[type="date"],
+    input[type="time"] {
+      display: block;
+      inline-size: 100%;
+      max-inline-size: 100%;
+      min-inline-size: 0;
+    }
+
     input::placeholder { color: #94a3b8; }
 
     .btn-row {
@@ -402,6 +410,14 @@
 
       .row, .btn-row {
         grid-template-columns: 1fr;
+      }
+    }
+
+    @supports (-webkit-touch-callout: none) {
+      input[type="date"],
+      input[type="time"] {
+        width: calc(100% - 16px);
+        -webkit-min-logical-width: calc(100% - 16px);
       }
     }
 
