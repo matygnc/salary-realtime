@@ -198,14 +198,7 @@
     }
 
     .stats-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 10px;
       padding: 0;
-    }
-
-    .stats-grid .mini.full {
-      grid-column: auto;
     }
 
     .section {
@@ -242,10 +235,6 @@
     .form-grid {
       display: grid;
       gap: 12px;
-    }
-
-    .form-grid .row {
-      grid-template-columns: 1fr;
     }
 
     .row {
@@ -407,15 +396,6 @@
         padding: 12px;
       }
 
-      .stats-grid {
-        grid-template-columns: 1fr;
-        gap: 9px;
-      }
-
-      .stats-grid .mini.full {
-        grid-column: auto;
-      }
-
       .mini {
         padding: 13px;
       }
@@ -475,7 +455,7 @@
       </div>
 
       <div class="form-grid">
-        <div class="row single">
+        <div class="row">
           <div>
             <label for="shiftMode">勤務モード</label>
             <select id="shiftMode">
@@ -492,7 +472,7 @@
           </div>
         </div>
 
-        <div class="row single">
+        <div class="row">
           <div>
             <label for="manualFinishTime">終了時刻</label>
             <input id="manualFinishTime" type="time" />
@@ -558,7 +538,7 @@
               <div class="mini-value" id="monthNightText">0:00</div>
             </div>
 
-            <div class="mini full">
+            <div class="mini">
               <div class="mini-label">総時間帯手当勤務時間（今月分）</div>
               <div class="mini-value" id="monthTimeBandText">0:00</div>
             </div>
