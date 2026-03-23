@@ -1771,7 +1771,8 @@
 
     function adjustTimeForShift(timeStr, officialStart, overnight) {
       if (!timeStr) return null;
-      let minutes = parseTimeToMinutes(timeStr);
+      let minutes = typeof timeStr === 'number' ? Number(timeStr) : parseTimeToMinutes(timeStr);
+      if (Number.isNaN(minutes)) return null;
       if (overnight && minutes < officialStart) minutes += 24 * 60;
       return minutes;
     }
@@ -2517,14 +2518,14 @@
 
     function render() {
       const now = new Date();
-      const nowLabel = formatTimeShort(now);
       const mode = els.shiftMode.value;
       const currentWorkDate = getRecommendedWorkDate(now, mode);
       const stage = getWageStage(parseDateInput(currentWorkDate));
       const dailyWage = stage.wage;
       const resolvedCurrentShiftType = resolveShiftTypeForDate(currentWorkDate, mode);
       const schedule = buildPaidSegments(resolvedCurrentShiftType);
-      const liveSchedule = buildPaidSegments(resolvedCurrentShiftType, nowLabel, { liveUntilTime: nowLabel });
+      const liveCutoffMinutes = getAdjustedNowMinutes(now, schedule);
+      const liveSchedule = buildPaidSegments(resolvedCurrentShiftType, liveCutoffMinutes);
       const elapsed = computeElapsedPaidMinutes(now, schedule);
       const currentBreakdown = withTimeBandMinutes(
         resolvedCurrentShiftType,
