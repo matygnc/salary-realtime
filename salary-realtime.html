@@ -1632,8 +1632,24 @@
       return Number(stage.wage || PAID_LEAVE_DAILY_PAY_FALLBACK || 0);
     }
 
-    function getDisplayEndLabel(record) {
+    function getEffectiveRecordEndLabel(record) {
       const endLabel = record?.endLabel || '';
+      if (!endLabel) return endLabel;
+      if (usesEarlyOvertimeOverride(record)) return endLabel;
+
+      const legacyAddedMinutes = record?.source === 'manual'
+        ? Math.max(0, Number(record.extraOvertimeMinutes || 0))
+        : 0;
+
+      if (legacyAddedMinutes > 0) {
+        return shiftTimeLabelByOffset(endLabel, -legacyAddedMinutes);
+      }
+
+      return endLabel;
+    }
+
+    function getDisplayEndLabel(record) {
+      const endLabel = getEffectiveRecordEndLabel(record);
       if (!endLabel || !record?.shiftType || !SHIFT_PRESETS[record.shiftType]) return endLabel;
 
       const shift = getShiftConfig(record.shiftType);
@@ -2042,7 +2058,7 @@
       }
 
       if (record.type === 'finish' && typeof record.endLabel === 'string' && record.endLabel.includes(':')) {
-        const schedule = buildPaidSegments(record.shiftType, record.endLabel, usesEarlyOvertimeOverride(record)
+        const schedule = buildPaidSegments(record.shiftType, getEffectiveRecordEndLabel(record), usesEarlyOvertimeOverride(record)
           ? { fixedEarlyOtMinutesOverride: record.extraOvertimeMinutes }
           : {});
         let segments = schedule.segments;
@@ -2074,7 +2090,7 @@
         };
       }
 
-      const schedule = buildPaidSegments(record.shiftType, record.endLabel || null, usesEarlyOvertimeOverride(record)
+      const schedule = buildPaidSegments(record.shiftType, getEffectiveRecordEndLabel(record) || null, usesEarlyOvertimeOverride(record)
         ? { fixedEarlyOtMinutesOverride: record.extraOvertimeMinutes }
         : {});
       let segments = schedule.segments;
@@ -2257,6 +2273,12 @@
       const hours = Math.floor(nextMinutes / 60);
       const minutes = nextMinutes % 60;
       return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    }
+
+    function shiftTimeLabelByOffset(timeLabel, offsetMinutes) {
+      const baseMinutes = parseTimeToMinutes(timeLabel);
+      if (Number.isNaN(baseMinutes)) return timeLabel;
+      return formatMinutesAsTimeLabel(baseMinutes + Number(offsetMinutes || 0));
     }
 
     function formatMinutesAsTimeLabel(totalMinutes) {
