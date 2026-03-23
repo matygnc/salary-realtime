@@ -801,7 +801,8 @@
     };
 
     const FIRST_SHIFT_SEGMENTS = [
-      ['06:30', '08:30'],
+      // 雇入通知書の始業時刻 06:20 を反映。後続の休憩帯は既存運用値を維持。
+      ['06:20', '08:30'],
       ['08:40', '10:40'],
       ['11:25', '12:55'],
       ['13:05', '14:35'],
@@ -809,11 +810,20 @@
     ];
 
     const SECOND_SHIFT_SEGMENTS = [
-      ['16:45', '18:45'],
+      // 雇入通知書の始業時刻 16:35 を反映。後続の休憩帯は既存運用値を維持。
+      ['16:35', '18:45'],
       ['18:55', '20:55'],
       ['21:40', '23:10'],
       ['23:20', '00:50'],
       ['01:00', '01:25']
+    ];
+
+    const HOLIDAY_SHIFT_SEGMENTS = [
+      ['06:30', '08:30'],
+      ['08:40', '10:40'],
+      ['11:25', '12:55'],
+      ['13:05', '14:35'],
+      ['14:45', '15:10']
     ];
     // 要確認: 雇入通知書の時刻表は画像だけでは細部を断定しづらいため、
     // 実運用はユーザー確定済みの詳細時刻を優先している。
@@ -822,8 +832,9 @@
       first: {
         // 白直 = 1直
         label: '1直',
-        start: '06:30',
+        start: '06:20',
         end: '15:10',
+        // 要確認: 雇入通知書の始業時刻に対して、現場運用の5分早出残業を継続計上する前提。
         fixedEarlyOtMinutes: 5,
         baseSegments: FIRST_SHIFT_SEGMENTS,
         overtimeEndTime: '16:35',
@@ -833,8 +844,9 @@
       },
       second: {
         label: '2直',
-        start: '16:45',
+        start: '16:35',
         end: '01:25',
+        // 要確認: 雇入通知書の始業時刻に対して、現場運用の5分早出残業を継続計上する前提。
         fixedEarlyOtMinutes: 5,
         baseSegments: SECOND_SHIFT_SEGMENTS,
         overtimeEndTime: '',
@@ -848,7 +860,8 @@
         start: '06:30',
         end: '15:10',
         fixedEarlyOtMinutes: 0,
-        baseSegments: FIRST_SHIFT_SEGMENTS,
+        // 要確認: 休日出勤の始業時刻は通知書では確認できないため、既存の 06:30 運用を維持。
+        baseSegments: HOLIDAY_SHIFT_SEGMENTS,
         overtimeEndTime: '15:10',
         overtimeBreaks: []
       },
@@ -1619,6 +1632,19 @@
       return Number(stage.wage || PAID_LEAVE_DAILY_PAY_FALLBACK || 0);
     }
 
+    function getDisplayEndLabel(record) {
+      const endLabel = record?.endLabel || '';
+      if (!endLabel || !record?.shiftType || !SHIFT_PRESETS[record.shiftType]) return endLabel;
+
+      const shift = getShiftConfig(record.shiftType);
+      const official = getOfficialSpan(shift);
+      const overnight = official.end > 24 * 60;
+      const adjusted = adjustTimeForShift(endLabel, official.start, overnight);
+      if (adjusted === null) return endLabel;
+      if (adjusted >= 24 * 60) return `翌${formatMinutesAsTimeLabel(adjusted)}`;
+      return formatMinutesAsTimeLabel(adjusted);
+    }
+
     function setPillVariant(el, variant) {
       if (!el) return;
       el.classList.remove('ok', 'warn', 'off');
@@ -1655,7 +1681,7 @@
         };
       }
 
-      const endText = record.endLabel ? `${record.endLabel} で` : '';
+      const endText = record.endLabel ? `${getDisplayEndLabel(record)} で` : '';
       return {
         pillText: '記録済み',
         pillVariant: 'ok',
@@ -2634,7 +2660,7 @@
       } else if (currentRecord) {
         recordNowLabel = '退勤済み';
         recordNowDisabled = true;
-        const endText = currentRecord.endLabel ? `${currentRecord.endLabel} で` : '';
+        const endText = currentRecord.endLabel ? `${getDisplayEndLabel(currentRecord)} で` : '';
         heroRecordNoteText = `${formatDateJP(parseDateInput(currentWorkDate))} は ${endText}退勤記録済みです。`;
       } else if (resolvedCurrentShiftType === 'off') {
         recordNowLabel = '休み日';
