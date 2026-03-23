@@ -87,6 +87,25 @@
       line-height: 1.5;
     }
 
+    .record-note {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .record-note.is-recorded {
+      background:
+        linear-gradient(145deg, rgba(34, 197, 94, 0.12), rgba(15, 23, 42, 0.16)),
+        rgba(255,255,255,0.04);
+      border-color: rgba(34, 197, 94, 0.28);
+      color: var(--text);
+    }
+
     .hero-action {
       margin-top: 14px;
     }
@@ -232,6 +251,24 @@
       background: rgba(255,255,255,0.04);
     }
 
+    .pill.ok {
+      color: #bbf7d0;
+      border-color: rgba(34, 197, 94, 0.28);
+      background: rgba(34, 197, 94, 0.12);
+    }
+
+    .pill.warn {
+      color: #fde68a;
+      border-color: rgba(245, 158, 11, 0.24);
+      background: rgba(245, 158, 11, 0.12);
+    }
+
+    .pill.off {
+      color: #fecaca;
+      border-color: rgba(239, 68, 68, 0.24);
+      background: rgba(239, 68, 68, 0.12);
+    }
+
     .form-grid {
       display: grid;
       gap: 12px;
@@ -341,6 +378,13 @@
     .primary {
       background: linear-gradient(135deg, var(--accent), var(--accent-2));
       box-shadow: 0 10px 24px rgba(139, 92, 246, 0.32);
+    }
+
+    button:disabled {
+      cursor: default;
+      opacity: 0.72;
+      box-shadow: none;
+      filter: saturate(0.7);
     }
 
     .secondary {
@@ -465,6 +509,7 @@
 
       <div class="money" id="liveGrossPay">¥0</div>
       <div class="caption" id="liveCaption">今月ここまで ¥0</div>
+      <div class="record-note" id="heroRecordNote" hidden></div>
 
       <div class="hero-action">
         <button class="primary" id="recordNowBtn">退勤</button>
@@ -489,7 +534,7 @@
     <section class="card section">
       <div class="section-title">
         <h2>今日の記録</h2>
-        <span class="pill">記録</span>
+        <span class="pill warn" id="recordStatePill">未記録</span>
       </div>
 
       <div class="form-grid">
@@ -528,6 +573,8 @@
           </div>
         </div>
       </div>
+
+      <div class="record-note" id="recordStateNote">対象日の記録はまだありません。</div>
 
       <div class="action-stack">
         <div class="btn-row single">
@@ -746,7 +793,7 @@
       dailyRecords: 'ayano-salary-daily-records-v13',
       annualLeave: 'ayano-salary-annual-leave-v1'
     };
-    const PAID_LEAVE_DAILY_PAY = 11800;
+    const PAID_LEAVE_DAILY_PAY_FALLBACK = 11800;
     const ANNUAL_LEAVE_BASELINE = {
       date: '2026-03-15',
       remainingDays: 7
@@ -768,6 +815,8 @@
       ['23:20', '00:50'],
       ['01:00', '01:25']
     ];
+    // 要確認: 雇入通知書の時刻表は画像だけでは細部を断定しづらいため、
+    // 実運用はユーザー確定済みの詳細時刻を優先している。
 
     const SHIFT_PRESETS = {
       first: {
@@ -819,8 +868,9 @@
       { key: 'wageSecond', label: '2回', startType: 'plusMonths', months: 6 },
       { key: 'wageThird', label: '3回', startType: 'plusMonths', months: 12 },
       { key: 'wageSenior1', label: '2年目シニア1回', startType: 'nextMonthAfterMonths', months: 12 },
-      { key: 'wageSenior2', label: '2年目シニア2回', startType: 'plusMonths', months: 24 },
-      { key: 'wageSenior3', label: '3年目シニア', startType: 'plusMonths', months: 30 }
+      // 2026-05-01の雇入通知書に合わせ、更新後の日給反映は契約更新月初に寄せる。
+      { key: 'wageSenior2', label: '2年目シニア2回', startType: 'nextMonthAfterMonths', months: 24 },
+      { key: 'wageSenior3', label: '3年目シニア', startType: 'nextMonthAfterMonths', months: 30 }
     ];
 
     const ANNUAL_LEAVE_GRANT_RULES = [
@@ -933,6 +983,7 @@
     const els = {
       liveGrossPay: document.getElementById('liveGrossPay'),
       liveCaption: document.getElementById('liveCaption'),
+      heroRecordNote: document.getElementById('heroRecordNote'),
       progressLabel: document.getElementById('progressLabel'),
       progressPercent: document.getElementById('progressPercent'),
       progressBar: document.getElementById('progressBar'),
@@ -960,6 +1011,8 @@
       experiencedAllowanceText: document.getElementById('experiencedAllowanceText'),
       specialAllowanceText: document.getElementById('specialAllowanceText'),
       shiftMode: document.getElementById('shiftMode'),
+      recordStatePill: document.getElementById('recordStatePill'),
+      recordStateNote: document.getElementById('recordStateNote'),
       recordDate: document.getElementById('recordDate'),
       manualFinishTime: document.getElementById('manualFinishTime'),
       manualExtraOvertimeMinutes: document.getElementById('manualExtraOvertimeMinutes'),
@@ -1559,6 +1612,58 @@
       };
     }
 
+    function getPaidLeaveDailyPay(recordDate) {
+      const baseDate = recordDate ? parseDateInput(recordDate) : new Date();
+      const stage = getWageStage(baseDate);
+      // 要確認: 年休日給が通常の日給改定と非連動なら個別設定へ戻す。
+      return Number(stage.wage || PAID_LEAVE_DAILY_PAY_FALLBACK || 0);
+    }
+
+    function setPillVariant(el, variant) {
+      if (!el) return;
+      el.classList.remove('ok', 'warn', 'off');
+      if (variant) el.classList.add(variant);
+    }
+
+    function getRecordDisplayMeta(record, dateStr) {
+      const dateLabel = dateStr ? formatDateJP(parseDateInput(dateStr)) : '対象日';
+
+      if (!record) {
+        return {
+          pillText: '未記録',
+          pillVariant: 'warn',
+          noteText: `${dateLabel} の記録はまだありません。`,
+          noteRecorded: false
+        };
+      }
+
+      if (isPaidLeaveRecord(record)) {
+        return {
+          pillText: '年休記録',
+          pillVariant: 'ok',
+          noteText: `${dateLabel} は年休として記録済みです。`,
+          noteRecorded: true
+        };
+      }
+
+      if (record.type === 'off') {
+        return {
+          pillText: '休み記録',
+          pillVariant: 'off',
+          noteText: `${dateLabel} は休みとして記録済みです。`,
+          noteRecorded: true
+        };
+      }
+
+      const endText = record.endLabel ? `${record.endLabel} で` : '';
+      return {
+        pillText: '記録済み',
+        pillVariant: 'ok',
+        noteText: `${dateLabel} は ${endText}退勤記録済みです。`,
+        noteRecorded: true
+      };
+    }
+
     function getAutoShiftType(dateStr) {
       if (!dateStr) return 'off';
       for (const [start, end] of AUTO_SHIFT_RANGES.first) {
@@ -1977,12 +2082,13 @@
       }
 
       if (shiftType === 'paidLeave') {
+        const paidLeavePay = getPaidLeaveDailyPay(recordDate);
         return {
-          baseGross: PAID_LEAVE_DAILY_PAY,
+          baseGross: paidLeavePay,
           overtimePay: 0,
           nightPay: 0,
           timeBandPay: 0,
-          totalPay: PAID_LEAVE_DAILY_PAY
+          totalPay: paidLeavePay
         };
       }
 
@@ -2409,6 +2515,8 @@
 
       const records = loadDailyRecords();
       const currentRecord = records[currentWorkDate] || null;
+      const selectedRecordDate = els.recordDate.value || currentWorkDate;
+      const selectedRecord = records[selectedRecordDate] || null;
       const currentRecordIsOff = currentRecord && currentRecord.type === 'off';
       const currentRecordIsPaidLeave = isPaidLeaveRecord(currentRecord);
       const currentRecordBreakdown = currentRecord && !currentRecordIsOff
@@ -2505,6 +2613,39 @@
       els.progressPercent.textContent = `${Math.round(progress)}%`;
       els.progressBar.style.width = `${progress}%`;
 
+      const selectedRecordMeta = getRecordDisplayMeta(selectedRecord, selectedRecordDate);
+      els.recordStatePill.textContent = selectedRecordMeta.pillText;
+      setPillVariant(els.recordStatePill, selectedRecordMeta.pillVariant);
+      els.recordStateNote.textContent = selectedRecordMeta.noteText;
+      els.recordStateNote.classList.toggle('is-recorded', selectedRecordMeta.noteRecorded);
+
+      let recordNowLabel = '退勤';
+      let recordNowDisabled = false;
+      let heroRecordNoteText = '';
+
+      if (currentRecordIsPaidLeave) {
+        recordNowLabel = '年休済み';
+        recordNowDisabled = true;
+        heroRecordNoteText = `${formatDateJP(parseDateInput(currentWorkDate))} は年休として記録済みです。`;
+      } else if (currentRecordIsOff) {
+        recordNowLabel = '休み済み';
+        recordNowDisabled = true;
+        heroRecordNoteText = `${formatDateJP(parseDateInput(currentWorkDate))} は休みとして記録済みです。`;
+      } else if (currentRecord) {
+        recordNowLabel = '退勤済み';
+        recordNowDisabled = true;
+        const endText = currentRecord.endLabel ? `${currentRecord.endLabel} で` : '';
+        heroRecordNoteText = `${formatDateJP(parseDateInput(currentWorkDate))} は ${endText}退勤記録済みです。`;
+      } else if (resolvedCurrentShiftType === 'off') {
+        recordNowLabel = '休み日';
+      }
+
+      els.recordNowBtn.textContent = recordNowLabel;
+      els.recordNowBtn.disabled = recordNowDisabled;
+      els.heroRecordNote.hidden = !heroRecordNoteText;
+      els.heroRecordNote.textContent = heroRecordNoteText;
+      els.heroRecordNote.classList.toggle('is-recorded', Boolean(heroRecordNoteText));
+
       if (!dailyWage) {
         els.progressLabel.textContent = '勤務進捗';
         els.shiftStatus.className = 'status off';
@@ -2518,7 +2659,7 @@
         els.shiftStatus.className = 'status off';
         els.shiftStatus.innerHTML = '<span class="dot"></span><span>休み</span>';
       } else if (currentRecord) {
-        els.progressLabel.textContent = '勤務進捗';
+        els.progressLabel.textContent = '退勤記録済み';
         els.shiftStatus.className = 'status';
         els.shiftStatus.innerHTML = '<span class="dot"></span><span>記録済み</span>';
       } else if (elapsed.state === 'before') {
