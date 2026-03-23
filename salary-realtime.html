@@ -1757,6 +1757,15 @@
       };
     }
 
+    function getEffectiveEarlyOvertimeMinutes(resolvedShiftType, overrideMinutes = null) {
+      const fallback = Number(getShiftConfig(resolvedShiftType).fixedEarlyOtMinutes || 0);
+      if (overrideMinutes === null || overrideMinutes === undefined || overrideMinutes === '') {
+        return fallback;
+      }
+      const numeric = Number(overrideMinutes);
+      return Number.isFinite(numeric) ? Math.max(0, numeric) : fallback;
+    }
+
     function parseTimeToMinutes(timeStr) {
       const [h, m] = String(timeStr || '00:00').split(':').map(Number);
       return (h * 60) + m;
@@ -1816,6 +1825,10 @@
       const effective = getEffectiveShiftSettings(resolvedShiftType);
       const shift = effective.shift;
       const liveUntilTime = options.liveUntilTime || null;
+      const earlyOvertimeMinutes = getEffectiveEarlyOvertimeMinutes(
+        resolvedShiftType,
+        options.fixedEarlyOtMinutesOverride
+      );
 
       if (resolvedShiftType === 'off') {
         return {
@@ -1845,9 +1858,9 @@
       const basePayMinutes = sumSegmentMinutes(baseSegments);
       let segments = [];
 
-      if (shift.fixedEarlyOtMinutes > 0) {
+      if (earlyOvertimeMinutes > 0) {
         segments.push({
-          start: official.start - shift.fixedEarlyOtMinutes,
+          start: official.start - earlyOvertimeMinutes,
           end: official.start,
           kind: 'early'
         });
@@ -2025,7 +2038,9 @@
       }
 
       if (record.type === 'finish' && typeof record.endLabel === 'string' && record.endLabel.includes(':')) {
-        const schedule = buildPaidSegments(record.shiftType, record.endLabel);
+        const schedule = buildPaidSegments(record.shiftType, record.endLabel, {
+          fixedEarlyOtMinutesOverride: record.extraOvertimeMinutes
+        });
         let segments = schedule.segments;
 
         if (Number(record.extraBreakMinutes || 0) > 0) {
@@ -2055,7 +2070,9 @@
         };
       }
 
-      const schedule = buildPaidSegments(record.shiftType, record.endLabel || null);
+      const schedule = buildPaidSegments(record.shiftType, record.endLabel || null, {
+        fixedEarlyOtMinutesOverride: record.extraOvertimeMinutes
+      });
       let segments = schedule.segments;
       if (Number(record.extraBreakMinutes || 0) > 0) {
         segments = trimSegmentsFromEnd(segments, Number(record.extraBreakMinutes || 0));
@@ -2323,14 +2340,18 @@
 
     function recordCurrentFinish() {
       const now = new Date();
-      const nowLabel = normalizeOvertimeEndLabel(
-        resolveShiftTypeForDate(getRecommendedWorkDate(now, els.shiftMode.value), els.shiftMode.value),
-        formatTimeShort(now)
-      );
-      const referenceDateStr = formatDateInput(now);
       const mode = els.shiftMode.value;
       const currentWorkDate = getRecommendedWorkDate(now, mode);
       const resolvedShiftType = resolveShiftTypeForDate(currentWorkDate, mode);
+      const earlyOvertimeMinutes = getEffectiveEarlyOvertimeMinutes(
+        resolvedShiftType,
+        (els.recordDate.value || currentWorkDate) === currentWorkDate ? els.manualExtraOvertimeMinutes.value : null
+      );
+      const nowLabel = normalizeOvertimeEndLabel(
+        resolvedShiftType,
+        formatTimeShort(now)
+      );
+      const referenceDateStr = formatDateInput(now);
       const stage = getWageStage(parseDateInput(currentWorkDate));
 
       if (resolvedShiftType === 'off') {
@@ -2342,7 +2363,9 @@
         return;
       }
 
-      const plannedSchedule = buildPaidSegments(resolvedShiftType);
+      const plannedSchedule = buildPaidSegments(resolvedShiftType, null, {
+        fixedEarlyOtMinutesOverride: earlyOvertimeMinutes
+      });
       const elapsed = computeElapsedPaidMinutes(now, plannedSchedule);
 
       if (elapsed.state === 'before') {
@@ -2350,7 +2373,10 @@
         return;
       }
 
-      const finishSchedule = buildPaidSegments(resolvedShiftType, nowLabel, { liveUntilTime: nowLabel });
+      const finishSchedule = buildPaidSegments(resolvedShiftType, nowLabel, {
+        liveUntilTime: nowLabel,
+        fixedEarlyOtMinutesOverride: earlyOvertimeMinutes
+      });
       const breakdown = withTimeBandMinutes(resolvedShiftType, getBreakdownFromSegments(finishSchedule.segments));
       const result = commitRecordChange(currentWorkDate, {
         type: 'finish',
@@ -2360,7 +2386,7 @@
         timeBandMinutes: breakdown.timeBandMinutes,
         endLabel: nowLabel,
         source: 'button',
-        extraOvertimeMinutes: 0,
+        extraOvertimeMinutes: earlyOvertimeMinutes,
         extraBreakMinutes: 0,
         shiftType: resolvedShiftType,
         recordDate: currentWorkDate,
@@ -2397,12 +2423,14 @@
         return;
       }
 
-      const manualExtraOvertime = Math.max(0, Number(els.manualExtraOvertimeMinutes.value || 0));
-      const effectiveFinishTime = normalizeOvertimeEndLabel(
+      const manualExtraOvertime = getEffectiveEarlyOvertimeMinutes(
         resolvedShiftType,
-        shiftTimeLabelByMinutes(els.manualFinishTime.value, manualExtraOvertime)
+        els.manualExtraOvertimeMinutes.value
       );
-      const schedule = buildPaidSegments(resolvedShiftType, effectiveFinishTime);
+      const effectiveFinishTime = normalizeOvertimeEndLabel(resolvedShiftType, els.manualFinishTime.value);
+      const schedule = buildPaidSegments(resolvedShiftType, effectiveFinishTime, {
+        fixedEarlyOtMinutesOverride: manualExtraOvertime
+      });
       let segments = schedule.segments;
 
       const manualExtraBreak = Math.max(0, Number(els.manualExtraBreakMinutes.value || 0));
@@ -2523,9 +2551,17 @@
       const stage = getWageStage(parseDateInput(currentWorkDate));
       const dailyWage = stage.wage;
       const resolvedCurrentShiftType = resolveShiftTypeForDate(currentWorkDate, mode);
-      const schedule = buildPaidSegments(resolvedCurrentShiftType);
+      const liveEarlyOvertimeMinutes = getEffectiveEarlyOvertimeMinutes(
+        resolvedCurrentShiftType,
+        (els.recordDate.value || currentWorkDate) === currentWorkDate ? els.manualExtraOvertimeMinutes.value : null
+      );
+      const schedule = buildPaidSegments(resolvedCurrentShiftType, null, {
+        fixedEarlyOtMinutesOverride: liveEarlyOvertimeMinutes
+      });
       const liveCutoffMinutes = getAdjustedNowMinutes(now, schedule);
-      const liveSchedule = buildPaidSegments(resolvedCurrentShiftType, liveCutoffMinutes);
+      const liveSchedule = buildPaidSegments(resolvedCurrentShiftType, liveCutoffMinutes, {
+        fixedEarlyOtMinutesOverride: liveEarlyOvertimeMinutes
+      });
       const elapsed = computeElapsedPaidMinutes(now, schedule);
       const currentBreakdown = withTimeBandMinutes(
         resolvedCurrentShiftType,
