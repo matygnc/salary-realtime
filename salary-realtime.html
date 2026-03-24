@@ -2157,6 +2157,7 @@
       }
 
       const includeDailyAllowance = options.includeDailyAllowance !== false;
+      const roundAllowances = options.roundAllowances !== false;
       const safeBreakdown = withTimeBandMinutes(shiftType, {
         paidMinutes: Number(breakdown?.paidMinutes || 0),
         regularMinutes: Number(
@@ -2172,15 +2173,12 @@
         safeBreakdown.regularMinutes,
         includeDailyAllowance
       );
-      const overtimePay = roundAllowanceYen(
-        safeBreakdown.overtimeMinutes * APP_CONFIG.allowanceRates.overtimePerMin
-      );
-      const nightPay = roundAllowanceYen(
-        safeBreakdown.nightMinutes * APP_CONFIG.allowanceRates.nightPerMin
-      );
-      const timeBandPay = roundAllowanceYen(
-        safeBreakdown.timeBandMinutes * APP_CONFIG.allowanceRates.timeBandPerMin
-      );
+      const overtimeRaw = safeBreakdown.overtimeMinutes * APP_CONFIG.allowanceRates.overtimePerMin;
+      const nightRaw = safeBreakdown.nightMinutes * APP_CONFIG.allowanceRates.nightPerMin;
+      const timeBandRaw = safeBreakdown.timeBandMinutes * APP_CONFIG.allowanceRates.timeBandPerMin;
+      const overtimePay = roundAllowances ? roundAllowanceYen(overtimeRaw) : overtimeRaw;
+      const nightPay = roundAllowances ? roundAllowanceYen(nightRaw) : nightRaw;
+      const timeBandPay = roundAllowances ? roundAllowanceYen(timeBandRaw) : timeBandRaw;
 
       return {
         baseGross,
@@ -2307,6 +2305,15 @@
         style: 'currency',
         currency: 'JPY',
         maximumFractionDigits: 0
+      }).format(Math.max(0, value || 0));
+    }
+
+    function yenLive(value) {
+      return new Intl.NumberFormat('ja-JP', {
+        style: 'currency',
+        currency: 'JPY',
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1
       }).format(Math.max(0, value || 0));
     }
 
@@ -2622,12 +2629,18 @@
       const effectivePaidMinutes = currentRecordBreakdown
         ? currentRecordBreakdown.paidMinutes
         : currentBreakdown.paidMinutes;
+      const isLiveAccumulating = !currentRecord
+        && !currentRecordIsOff
+        && !currentRecordIsPaidLeave
+        && resolvedCurrentShiftType !== 'off'
+        && elapsed.state !== 'before';
       const currentPaySummary = (currentRecordIsOff || resolvedCurrentShiftType === 'off')
         ? getPaySummary(currentWorkDate, 'off', null)
         : currentRecordBreakdown
           ? getPaySummary(currentRecord.recordDate, currentRecord.shiftType, currentRecordBreakdown)
           : getPaySummary(currentWorkDate, resolvedCurrentShiftType, currentBreakdown, {
-            includeDailyAllowance: elapsed.state === 'after'
+            includeDailyAllowance: elapsed.state === 'after',
+            roundAllowances: !isLiveAccumulating
           });
       const isOpenEndedSecondOvertime = !currentRecord
         && resolvedCurrentShiftType === 'second'
@@ -2659,7 +2672,7 @@
         monthToDate.timeBandMinutes * APP_CONFIG.allowanceRates.timeBandPerMin
       );
 
-      els.liveGrossPay.textContent = yen(currentPaySummary.totalPay);
+      els.liveGrossPay.textContent = isLiveAccumulating ? yenLive(currentPaySummary.totalPay) : yen(currentPaySummary.totalPay);
       els.liveCaption.textContent = `今月ここまで ${yen(monthToDate.totalPay)}`;
       els.monthOvertimeText.textContent = formatMinutesAsHourMin(monthToDate.overtimeMinutes);
       els.monthNightText.textContent = formatMinutesAsHourMin(monthToDate.nightMinutes);
