@@ -80,6 +80,18 @@
       line-height: 1;
     }
 
+    .money-whole {
+      display: inline;
+    }
+
+    .money-fraction {
+      display: inline;
+      font-size: 0.5em;
+      opacity: 0.5;
+      letter-spacing: 0;
+      vertical-align: 0.18em;
+    }
+
     .caption {
       margin-top: 10px;
       font-size: 15px;
@@ -2317,6 +2329,15 @@
       }).format(Math.max(0, value || 0));
     }
 
+    function formatMoneyMarkup(value, { live = false } = {}) {
+      const formatted = live ? yenLive(value) : yen(value);
+      const [whole, fraction] = String(formatted).split('.');
+      if (!fraction) {
+        return `<span class="money-whole">${whole}</span>`;
+      }
+      return `<span class="money-whole">${whole}</span><span class="money-fraction">.${fraction}</span>`;
+    }
+
     function formatDays(value) {
       return `${Math.max(0, Number(value || 0))}日`;
     }
@@ -2672,7 +2693,9 @@
         monthToDate.timeBandMinutes * APP_CONFIG.allowanceRates.timeBandPerMin
       );
 
-      els.liveGrossPay.textContent = isLiveAccumulating ? yenLive(currentPaySummary.totalPay) : yen(currentPaySummary.totalPay);
+      els.liveGrossPay.innerHTML = formatMoneyMarkup(currentPaySummary.totalPay, {
+        live: isLiveAccumulating
+      });
       els.liveCaption.textContent = `今月ここまで ${yen(monthToDate.totalPay)}`;
       els.monthOvertimeText.textContent = formatMinutesAsHourMin(monthToDate.overtimeMinutes);
       els.monthNightText.textContent = formatMinutesAsHourMin(monthToDate.nightMinutes);
