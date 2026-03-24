@@ -603,10 +603,18 @@
         <div class="btn-row single">
           <button class="danger" id="clearRecordBtn">記録削除</button>
         </div>
+        <div class="btn-row duo-mobile">
+          <button class="secondary" id="exportDataBtn">データ保存</button>
+          <button class="secondary" id="importDataBtn">データ読込</button>
+        </div>
+        <input id="importFileInput" type="file" accept="application/json,.json" hidden />
       </div>
 
       <div class="helper-note">
         2直残業の別15分休憩は要確認です。時刻不明のため自動控除していないので、必要な日は「追加休憩」で調整してください。
+      </div>
+      <div class="helper-note">
+        別ブラウザへ移すときは「データ保存」で書き出し、「データ読込」でこの端末のデータを置き換えてください。
       </div>
     </section>
 
@@ -1050,7 +1058,10 @@
       applyManualBtn: document.getElementById('applyManualBtn'),
       markOffBtn: document.getElementById('markOffBtn'),
       clearRecordBtn: document.getElementById('clearRecordBtn'),
-      annualLeaveBtn: document.getElementById('annualLeaveBtn')
+      annualLeaveBtn: document.getElementById('annualLeaveBtn'),
+      exportDataBtn: document.getElementById('exportDataBtn'),
+      importDataBtn: document.getElementById('importDataBtn'),
+      importFileInput: document.getElementById('importFileInput')
     };
 
     const defaultUI = {
@@ -1114,6 +1125,19 @@
       setStorageValue(UI_STORAGE_KEY, JSON.stringify(data), LEGACY_STORAGE_KEYS.ui);
     }
 
+    function applyUIState(ui) {
+      const nextUI = { ...defaultUI, ...(ui || {}) };
+      els.shiftMode.value = nextUI.shiftMode || 'auto';
+      els.recordDate.value = nextUI.recordDate || getRecommendedWorkDate(new Date(), els.shiftMode.value);
+      els.manualFinishTime.value = nextUI.manualFinishTime || '';
+      els.manualExtraOvertimeMinutes.value = nextUI.manualExtraOvertimeMinutes ?? defaultUI.manualExtraOvertimeMinutes;
+      els.manualExtraBreakMinutes.value = nextUI.manualExtraBreakMinutes ?? defaultUI.manualExtraBreakMinutes;
+
+      if (!els.manualFinishTime.value) {
+        applyRegularFinishTime(false);
+      }
+    }
+
     function loadDailyRecords() {
       try {
         const raw = getStorageValue(DAILY_RECORD_KEY, LEGACY_STORAGE_KEYS.dailyRecords);
@@ -1164,6 +1188,83 @@
       localStorage.setItem(primaryKey, value);
       if (legacyKey) {
         localStorage.removeItem(legacyKey);
+      }
+    }
+
+    function isPlainObject(value) {
+      return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+    }
+
+    function createExportPayload() {
+      return {
+        backupType: 'salary-realtime-backup',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        ui: {
+          shiftMode: els.shiftMode.value,
+          recordDate: els.recordDate.value,
+          manualFinishTime: els.manualFinishTime.value,
+          manualExtraOvertimeMinutes: Number(els.manualExtraOvertimeMinutes.value || 0),
+          manualExtraBreakMinutes: Number(els.manualExtraBreakMinutes.value || 0)
+        },
+        dailyRecords: loadDailyRecords(),
+        annualLeaveState: normalizeAnnualLeaveState(loadAnnualLeaveState() || getDefaultAnnualLeaveState())
+      };
+    }
+
+    function exportAppData() {
+      try {
+        saveUI();
+        const payload = createExportPayload();
+        const fileStamp = formatDateInput(new Date()).replace(/-/g, '');
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `salary-realtime-backup-${fileStamp}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        flashButton(els.exportDataBtn, '保存済み');
+      } catch {
+        flashButton(els.exportDataBtn, '失敗');
+      }
+    }
+
+    function importAppData() {
+      els.importFileInput.value = '';
+      els.importFileInput.click();
+    }
+
+    async function handleImportFile(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const payload = JSON.parse(text);
+
+        if (!isPlainObject(payload) || payload.backupType !== 'salary-realtime-backup') {
+          throw new Error('invalid-backup');
+        }
+
+        const importedUI = isPlainObject(payload.ui) ? { ...defaultUI, ...payload.ui } : { ...defaultUI };
+        const importedRecords = isPlainObject(payload.dailyRecords) ? payload.dailyRecords : {};
+        const importedAnnualLeaveState = payload.annualLeaveState
+          ? normalizeAnnualLeaveState(payload.annualLeaveState)
+          : getDefaultAnnualLeaveState();
+
+        saveDailyRecords(importedRecords);
+        saveAnnualLeaveState(importedAnnualLeaveState);
+        applyUIState(importedUI);
+        saveUI();
+        render();
+        flashButton(els.importDataBtn, '読込済み');
+      } catch {
+        flashButton(els.importDataBtn, '失敗');
+      } finally {
+        event.target.value = '';
       }
     }
 
@@ -2818,14 +2919,7 @@
 
       pruneScheduleAllowanceCards();
       applyMonthlySummaryLabels();
-
-      els.shiftMode.value = ui.shiftMode || 'auto';
-      els.recordDate.value = ui.recordDate || getRecommendedWorkDate(now, els.shiftMode.value);
-      els.manualFinishTime.value = ui.manualFinishTime || '';
-      els.manualExtraOvertimeMinutes.value = ui.manualExtraOvertimeMinutes || 0;
-      els.manualExtraBreakMinutes.value = ui.manualExtraBreakMinutes || 0;
-
-      applyRegularFinishTime(false);
+      applyUIState(ui);
 
       els.shiftMode.addEventListener('change', () => {
         if (!els.recordDate.value) {
@@ -2861,6 +2955,9 @@
       els.markOffBtn.addEventListener('click', markDayOff);
       els.clearRecordBtn.addEventListener('click', clearSelectedRecord);
       els.annualLeaveBtn.addEventListener('click', markAnnualLeave);
+      els.exportDataBtn.addEventListener('click', exportAppData);
+      els.importDataBtn.addEventListener('click', importAppData);
+      els.importFileInput.addEventListener('change', handleImportFile);
 
       render();
       setInterval(render, 1000);
