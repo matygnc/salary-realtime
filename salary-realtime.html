@@ -2289,9 +2289,9 @@
     }
 
     function normalizeOvertimeEndLabel(shiftType, endLabel) {
-      if (!endLabel || !SHIFT_DEFS[shiftType]) return endLabel;
+      if (!endLabel || !SHIFT_PRESETS[shiftType]) return endLabel;
 
-      const official = getOfficialSpan(SHIFT_DEFS[shiftType]);
+      const official = getOfficialSpan(SHIFT_PRESETS[shiftType]);
       const overnight = official.end > 24 * 60;
       const adjustedEnd = adjustTimeForShift(endLabel, official.start, overnight);
       if (adjustedEnd === null) return endLabel;
