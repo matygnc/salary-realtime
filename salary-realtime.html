@@ -1988,7 +1988,9 @@
       const official = getOfficialSpan(shift);
       const overnight = official.end > 24 * 60;
       const cutoffMinutes = overrideEndTime !== null
-        ? adjustTimeForShift(overrideEndTime, official.start, overnight)
+        ? (typeof overrideEndTime === 'number'
+          ? Number(overrideEndTime)
+          : adjustTimeForShift(overrideEndTime, official.start, overnight))
         : null;
       const baseKind = resolvedShiftType === 'holiday' ? 'overtime' : 'official';
       const baseSegments = buildClockSegments(effective.baseSegments, official.start, overnight, baseKind);
@@ -2017,7 +2019,9 @@
         const overtimeEndSource = overrideEndTime !== null
           ? overrideEndTime
           : (effective.overtimeEndTime || liveUntilTime || null);
-        const overtimeEnd = adjustTimeForShift(overtimeEndSource, official.start, overnight);
+        const overtimeEnd = typeof overtimeEndSource === 'number'
+          ? Number(overtimeEndSource)
+          : adjustTimeForShift(overtimeEndSource, official.start, overnight);
 
         if (overtimeEnd && overtimeEnd > overtimeStart) {
           overtimeConfigured = true;
