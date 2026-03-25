@@ -2058,9 +2058,17 @@
       };
     }
 
-    function getAdjustedNowMinutes(now, schedule) {
+    function getAdjustedNowMinutes(now, schedule, workDateStr = '') {
       let nowMinutes = now.getHours() * 60 + now.getMinutes() + (now.getSeconds() / 60);
       const overnight = schedule.lastPaidEnd > 24 * 60;
+      if (overnight && workDateStr) {
+        const todayStr = formatDateInput(now);
+        // 要確認: 深夜明けの継続判定は、現在時刻ではなく「どの勤務日を表示中か」で切り替える。
+        if (workDateStr < todayStr && nowMinutes < schedule.firstPaidStart) {
+          nowMinutes += 24 * 60;
+        }
+        return nowMinutes;
+      }
       if (overnight && nowMinutes < schedule.firstPaidStart) nowMinutes += 24 * 60;
       return nowMinutes;
     }
@@ -2151,12 +2159,12 @@
       };
     }
 
-    function getCurrentElapsedBreakdown(now, schedule) {
+    function getCurrentElapsedBreakdown(now, schedule, workDateStr = '') {
       if (!schedule.segments.length) {
         return { paidMinutes: 0, regularMinutes: 0, overtimeMinutes: 0, nightMinutes: 0, timeBandMinutes: 0 };
       }
 
-      const adjustedNow = getAdjustedNowMinutes(now, schedule);
+      const adjustedNow = getAdjustedNowMinutes(now, schedule, workDateStr);
       if (adjustedNow <= schedule.firstPaidStart) {
         return { paidMinutes: 0, regularMinutes: 0, overtimeMinutes: 0, nightMinutes: 0, timeBandMinutes: 0 };
       }
@@ -2217,14 +2225,14 @@
       return withTimeBandMinutes(record.shiftType, getBreakdownFromSegments(segments));
     }
 
-    function computeElapsedPaidMinutes(now, schedule) {
-      const breakdown = getCurrentElapsedBreakdown(now, schedule);
+    function computeElapsedPaidMinutes(now, schedule, workDateStr = '') {
+      const breakdown = getCurrentElapsedBreakdown(now, schedule, workDateStr);
 
       if (!schedule.segments.length) {
         return { state: 'off', elapsedPaidMinutes: 0 };
       }
 
-      const adjustedNow = getAdjustedNowMinutes(now, schedule);
+      const adjustedNow = getAdjustedNowMinutes(now, schedule, workDateStr);
       if (adjustedNow < schedule.firstPaidStart) {
         return { state: 'before', elapsedPaidMinutes: 0 };
       }
@@ -2525,7 +2533,7 @@
       const plannedSchedule = buildPaidSegments(resolvedShiftType, null, {
         fixedEarlyOtMinutesOverride: earlyOvertimeMinutes
       });
-      const elapsed = computeElapsedPaidMinutes(now, plannedSchedule);
+      const elapsed = computeElapsedPaidMinutes(now, plannedSchedule, currentWorkDate);
 
       if (elapsed.state === 'before') {
         flashButton(els.recordNowBtn, '勤務前');
@@ -2719,18 +2727,18 @@
       const schedule = buildPaidSegments(resolvedCurrentShiftType, null, {
         fixedEarlyOtMinutesOverride: liveEarlyOvertimeMinutes
       });
-      const liveCutoffMinutes = getAdjustedNowMinutes(now, schedule);
+      const liveCutoffMinutes = getAdjustedNowMinutes(now, schedule, currentWorkDate);
       const liveSchedule = buildPaidSegments(resolvedCurrentShiftType, liveCutoffMinutes, {
         fixedEarlyOtMinutesOverride: liveEarlyOvertimeMinutes
       });
-      const elapsed = computeElapsedPaidMinutes(now, schedule);
+      const elapsed = computeElapsedPaidMinutes(now, schedule, currentWorkDate);
       const currentBreakdown = withTimeBandMinutes(
         resolvedCurrentShiftType,
         getBreakdownFromSegments(liveSchedule.segments)
       );
       const plannedCurrentBreakdown = withTimeBandMinutes(
         resolvedCurrentShiftType,
-        getCurrentElapsedBreakdown(now, schedule)
+        getCurrentElapsedBreakdown(now, schedule, currentWorkDate)
       );
       const projectedBreakdown = withTimeBandMinutes(
         resolvedCurrentShiftType,
