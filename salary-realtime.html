@@ -873,7 +873,8 @@
         // 要確認: 雇入通知書の始業時刻に対して、現場運用の5分早出残業を継続計上する前提。
         fixedEarlyOtMinutes: 5,
         baseSegments: SECOND_SHIFT_SEGMENTS,
-        overtimeEndTime: '',
+        // 要確認: 2直残業の厳密な上限は未確認のため、暫定で次の1直始業 06:20 を上限とする。
+        overtimeEndTime: '06:20',
         overtimeBreaks: [
           ['02:25', '02:35']
           // 要確認: 2直残業には別の15分休憩もあるが、時刻不明のため自動控除していない。
@@ -1000,6 +1001,8 @@
         ['2027-03-22', '2027-03-26']
       ]
     };
+    const SECOND_SHIFT_DISPLAY_RESET_HOUR = 12;
+
     const AUTO_SHIFT_COVERAGE_BOUNDS = (() => {
       const starts = [];
       const ends = [];
@@ -1841,13 +1844,13 @@
     function getRecommendedWorkDate(now, selectedMode) {
       const current = formatDateInput(now);
 
-      if (selectedMode === 'second' && now.getHours() < 8) {
+      if (selectedMode === 'second' && now.getHours() < SECOND_SHIFT_DISPLAY_RESET_HOUR) {
         const prev = new Date(now);
         prev.setDate(prev.getDate() - 1);
         return formatDateInput(prev);
       }
 
-      if (selectedMode === 'auto' && now.getHours() < 8) {
+      if (selectedMode === 'auto' && now.getHours() < SECOND_SHIFT_DISPLAY_RESET_HOUR) {
         const prev = new Date(now);
         prev.setDate(prev.getDate() - 1);
         const prevDate = formatDateInput(prev);
@@ -1987,11 +1990,17 @@
 
       const official = getOfficialSpan(shift);
       const overnight = official.end > 24 * 60;
-      const cutoffMinutes = overrideEndTime !== null
+      const overtimeLimitMinutes = effective.overtimeEndTime
+        ? adjustTimeForShift(effective.overtimeEndTime, official.start, overnight)
+        : null;
+      const rawCutoffMinutes = overrideEndTime !== null
         ? (typeof overrideEndTime === 'number'
           ? Number(overrideEndTime)
           : adjustTimeForShift(overrideEndTime, official.start, overnight))
         : null;
+      const cutoffMinutes = rawCutoffMinutes !== null && overtimeLimitMinutes !== null
+        ? Math.min(rawCutoffMinutes, overtimeLimitMinutes)
+        : rawCutoffMinutes;
       const baseKind = resolvedShiftType === 'holiday' ? 'overtime' : 'official';
       const baseSegments = buildClockSegments(effective.baseSegments, official.start, overnight, baseKind);
       const basePayMinutes = sumSegmentMinutes(baseSegments);
@@ -2019,9 +2028,12 @@
         const overtimeEndSource = overrideEndTime !== null
           ? overrideEndTime
           : (effective.overtimeEndTime || liveUntilTime || null);
-        const overtimeEnd = typeof overtimeEndSource === 'number'
+        const rawOvertimeEnd = typeof overtimeEndSource === 'number'
           ? Number(overtimeEndSource)
           : adjustTimeForShift(overtimeEndSource, official.start, overnight);
+        const overtimeEnd = overtimeLimitMinutes !== null && rawOvertimeEnd !== null
+          ? Math.min(rawOvertimeEnd, overtimeLimitMinutes)
+          : rawOvertimeEnd;
 
         if (overtimeEnd && overtimeEnd > overtimeStart) {
           overtimeConfigured = true;
@@ -2422,11 +2434,15 @@
       const overnight = official.end > 24 * 60;
       const adjustedEnd = adjustTimeForShift(endLabel, official.start, overnight);
       if (adjustedEnd === null) return endLabel;
+      const overtimeLimit = SHIFT_PRESETS[shiftType].overtimeEndTime
+        ? adjustTimeForShift(SHIFT_PRESETS[shiftType].overtimeEndTime, official.start, overnight)
+        : null;
+      const clampedEnd = overtimeLimit !== null ? Math.min(adjustedEnd, overtimeLimit) : adjustedEnd;
 
-      const shouldRoundDown = shiftType === 'holiday' || adjustedEnd > official.end;
+      const shouldRoundDown = shiftType === 'holiday' || clampedEnd > official.end;
       if (!shouldRoundDown) return endLabel;
 
-      return formatMinutesAsTimeLabel(Math.floor(adjustedEnd / 5) * 5);
+      return formatMinutesAsTimeLabel(Math.floor(clampedEnd / 5) * 5);
     }
 
     function yen(value) {
