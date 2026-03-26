@@ -603,7 +603,7 @@
         <div class="btn-row single">
           <button class="danger" id="clearRecordBtn">記録削除</button>
         </div>
-        <div class="btn-row duo-mobile" hidden>
+        <div class="btn-row duo-mobile" hidden style="display:none">
           <button class="secondary" id="exportDataBtn">データ保存</button>
           <button class="secondary" id="importDataBtn">データ読込</button>
         </div>
@@ -613,7 +613,7 @@
       <div class="helper-note">
         2直残業の別15分休憩は要確認です。時刻不明のため自動控除していないので、必要な日は「追加休憩」で調整してください。
       </div>
-      <div class="helper-note" hidden>
+      <div class="helper-note" hidden style="display:none">
         別ブラウザへ移すときは「データ保存」で書き出し、「データ読込」でこの端末のデータを置き換えてください。
       </div>
     </section>
@@ -1843,6 +1843,7 @@
 
     function getRecommendedWorkDate(now, selectedMode) {
       const current = formatDateInput(now);
+      const todayAutoShift = getAutoShiftType(current);
 
       if (selectedMode === 'second' && now.getHours() < SECOND_SHIFT_DISPLAY_RESET_HOUR) {
         const prev = new Date(now);
@@ -1854,7 +1855,7 @@
         const prev = new Date(now);
         prev.setDate(prev.getDate() - 1);
         const prevDate = formatDateInput(prev);
-        if (getAutoShiftType(prevDate) === 'second') return prevDate;
+        if (todayAutoShift !== 'first' && getAutoShiftType(prevDate) === 'second') return prevDate;
       }
 
       return current;
@@ -1877,6 +1878,28 @@
         els.manualFinishTime.value = regular;
       }
       saveUI();
+    }
+
+    function maybeRollRecordDate(now) {
+      const recommendedDate = getRecommendedWorkDate(now, els.shiftMode.value);
+      if (!els.recordDate.value) {
+        els.recordDate.value = recommendedDate;
+        applyRegularFinishTime(true);
+        return;
+      }
+
+      if (els.recordDate.value === recommendedDate) return;
+
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayKey = formatDateInput(yesterday);
+      const todayKey = formatDateInput(now);
+      const shouldRoll = els.recordDate.value === yesterdayKey && recommendedDate === todayKey;
+
+      if (!shouldRoll) return;
+
+      els.recordDate.value = recommendedDate;
+      applyRegularFinishTime(true);
     }
 
     function getShiftConfig(shiftType) {
@@ -2736,6 +2759,7 @@
     function render() {
       const now = new Date();
       const mode = els.shiftMode.value;
+      maybeRollRecordDate(now);
       const currentWorkDate = getRecommendedWorkDate(now, mode);
       const stage = getWageStage(parseDateInput(currentWorkDate));
       const dailyWage = stage.wage;
@@ -2810,11 +2834,22 @@
       );
       const scheduleAllowanceStatus = getCurrentScheduleAllowanceStatus(parseDateInput(currentWorkDate));
 
+      const progressSchedule = currentRecord && !currentRecordIsOff
+        ? buildPaidSegments(currentRecord.shiftType, null, usesEarlyOvertimeOverride(currentRecord)
+          ? { fixedEarlyOtMinutesOverride: currentRecord.extraOvertimeMinutes }
+          : {})
+        : schedule;
+      const progressBaseMinutes = Math.max(0, Number(progressSchedule.basePayMinutes || 0));
+      const progressEarlyMinutes = currentRecord && currentRecord.shiftType !== 'holiday'
+        ? Number(progressSchedule.fixedEarlyOtMinutes || 0)
+        : (resolvedCurrentShiftType === 'holiday' ? 0 : Number(progressSchedule.fixedEarlyOtMinutes || 0));
+      const progressPaidMinutes = Math.max(0, effectivePaidMinutes - progressEarlyMinutes);
       const progress = currentRecordIsPaidLeave
         ? 100
         : (currentRecordIsOff || resolvedCurrentShiftType === 'off')
         ? 0
-        : (schedule.totalPaidMinutes > 0 ? Math.min(100, (effectivePaidMinutes / schedule.totalPaidMinutes) * 100) : 0);
+        : (progressBaseMinutes > 0 ? (progressPaidMinutes / progressBaseMinutes) * 100 : 0);
+      const progressBarPercent = Math.max(0, Math.min(progress, 100));
 
       const overtimePayMonth = roundAllowanceYen(
         monthToDate.overtimeMinutes * APP_CONFIG.allowanceRates.overtimePerMin
@@ -2871,7 +2906,7 @@
         ...SCHEDULE_ALLOWANCE_REFERENCE.halfYearSpecialBonusOptions.filter((value) => !SCHEDULE_ALLOWANCE_REFERENCE.specialBonusOptions.includes(value))
       ].map((value) => yen(value)).join(' / ');
       els.progressPercent.textContent = `${Math.round(progress)}%`;
-      els.progressBar.style.width = `${progress}%`;
+      els.progressBar.style.width = `${progressBarPercent}%`;
 
       const selectedRecordMeta = getRecordDisplayMeta(selectedRecord, selectedRecordDate);
       els.recordStatePill.textContent = selectedRecordMeta.pillText;
