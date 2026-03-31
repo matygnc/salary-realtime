@@ -1070,10 +1070,13 @@
     const defaultUI = {
       shiftMode: 'auto',
       recordDate: '',
+      recordDateAutoManaged: true,
       manualFinishTime: '',
       manualExtraOvertimeMinutes: 5,
       manualExtraBreakMinutes: 0
     };
+
+    let recordDateAutoManaged = true;
 
     const REMOVED_SCHEDULE_ALLOWANCE_IDS = [
       'contractMonthText',
@@ -1121,6 +1124,7 @@
       const data = {
         shiftMode: els.shiftMode.value,
         recordDate: els.recordDate.value,
+        recordDateAutoManaged,
         manualFinishTime: els.manualFinishTime.value,
         manualExtraOvertimeMinutes: Number(els.manualExtraOvertimeMinutes.value || 0),
         manualExtraBreakMinutes: Number(els.manualExtraBreakMinutes.value || 0)
@@ -1130,8 +1134,12 @@
 
     function applyUIState(ui) {
       const nextUI = { ...defaultUI, ...(ui || {}) };
+      const recommendedDate = getRecommendedWorkDate(new Date(), nextUI.shiftMode || 'auto');
       els.shiftMode.value = nextUI.shiftMode || 'auto';
-      els.recordDate.value = nextUI.recordDate || getRecommendedWorkDate(new Date(), els.shiftMode.value);
+      els.recordDate.value = nextUI.recordDate || recommendedDate;
+      recordDateAutoManaged = nextUI.recordDate
+        ? nextUI.recordDateAutoManaged !== false
+        : true;
       els.manualFinishTime.value = nextUI.manualFinishTime || '';
       els.manualExtraOvertimeMinutes.value = nextUI.manualExtraOvertimeMinutes ?? defaultUI.manualExtraOvertimeMinutes;
       els.manualExtraBreakMinutes.value = nextUI.manualExtraBreakMinutes ?? defaultUI.manualExtraBreakMinutes;
@@ -1881,6 +1889,8 @@
     }
 
     function maybeRollRecordDate(now) {
+      if (!recordDateAutoManaged) return;
+
       const recommendedDate = getRecommendedWorkDate(now, els.shiftMode.value);
       if (!els.recordDate.value) {
         els.recordDate.value = recommendedDate;
@@ -1889,14 +1899,6 @@
       }
 
       if (els.recordDate.value === recommendedDate) return;
-
-      const yesterday = new Date(now);
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayKey = formatDateInput(yesterday);
-      const todayKey = formatDateInput(now);
-      const shouldRoll = els.recordDate.value === yesterdayKey && recommendedDate === todayKey;
-
-      if (!shouldRoll) return;
 
       els.recordDate.value = recommendedDate;
       applyRegularFinishTime(true);
@@ -2609,6 +2611,7 @@
         return;
       }
 
+      recordDateAutoManaged = true;
       els.recordDate.value = currentWorkDate;
       applyRegularFinishTime(false);
       saveUI();
@@ -2985,8 +2988,9 @@
       applyUIState(ui);
 
       els.shiftMode.addEventListener('change', () => {
-        if (!els.recordDate.value) {
+        if (!els.recordDate.value || recordDateAutoManaged) {
           els.recordDate.value = getRecommendedWorkDate(new Date(), els.shiftMode.value);
+          recordDateAutoManaged = true;
         }
         applyRegularFinishTime(false);
         saveUI();
@@ -2994,8 +2998,12 @@
       });
 
       els.recordDate.addEventListener('change', () => {
+        const recommendedDate = getRecommendedWorkDate(new Date(), els.shiftMode.value);
         if (!els.recordDate.value) {
-          els.recordDate.value = getRecommendedWorkDate(new Date(), els.shiftMode.value);
+          els.recordDate.value = recommendedDate;
+          recordDateAutoManaged = true;
+        } else {
+          recordDateAutoManaged = els.recordDate.value === recommendedDate;
         }
         applyRegularFinishTime(true);
         saveUI();
